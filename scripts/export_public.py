@@ -136,7 +136,7 @@ def main():
                 'and the scripts in `scripts/` build them from public sources.\n')
         readme.write_text(readme.read_text('utf8').rstrip() + note, 'utf8')
     gi = out / '.gitignore'
-    extra = '\n# data is built locally and never committed here\ndist/data/\ndist/rhone/data/\n'
+    extra = '\n# data is built locally and never committed here\ndist/data/\ndist/rhone/data/\nscripts/data/\n'
     gi.write_text((gi.read_text('utf8') if gi.exists() else '') + extra, 'utf8')
     print(f'copied {len(files)} files, {n} data families templated -> {out}')
 

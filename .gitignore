@@ -11,3 +11,4 @@ node_modules/
 # data is built locally and never committed here
 dist/data/
 dist/rhone/data/
+scripts/data/
