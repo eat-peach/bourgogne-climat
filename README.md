@@ -86,7 +86,3 @@ npx wrangler deploy              # deploy to Cloudflare (needs your own account 
 ```
 
 For the feedback forms in local development, copy `.dev.vars.example` to `.dev.vars`.
-
-## Author
-
-Created by Daoyi Zhang.

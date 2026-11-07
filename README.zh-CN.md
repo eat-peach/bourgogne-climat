@@ -81,7 +81,3 @@ npx wrangler deploy              # 部署到 Cloudflare（需要你自己的账�
 ```
 
 如需在本地开发中使用反馈表单，请将 `.dev.vars.example` 复制为 `.dev.vars`。
-
-## 作者
-
-由 Daoyi Zhang 制作。
