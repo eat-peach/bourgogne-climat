@@ -1179,3 +1179,170 @@ html{touch-action:manipulation}
 .phone-ui .opacity-control output{min-width:30px;text-align:right}
 .phone-ui.phone-view-open .terroir-legend{bottom:calc(var(--controls-sheet-h,260px) + 10px)}
 .phone-ui .opacity-control>.opacity-word{display:inline!important;letter-spacing:.06em}
+/* shareable links */
+.share-link-btn{display:inline-flex;align-items:center;gap:6px;margin-top:10px;height:28px;padding:0 11px 0 9px;border:1px solid var(--line);border-radius:999px;background:#fffdf7;font:500 11.5px/1 var(--sans);color:var(--wine);cursor:pointer}
+.share-link-btn:hover,.share-link-btn:focus-visible{border-color:var(--wine)}
+.share-link-btn svg,#copy-link-button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fact-heading .share-link-btn{display:flex;width:max-content}
+.owner-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.owner-card-top .share-link-btn{margin-top:0}
+#copy-link-button{display:inline-flex;align-items:center;gap:6px}
+#copy-link-button .button-label{color:inherit;padding-left:0}
+/* ---- Compare two crus ---- */
+@media (min-width:761px){:root:has(.detail-panel.is-compare){--info-panel-width:540px}}
+.feature-card.is-compare{gap:0}
+.cmp-head{padding:0 26px 10px 0}
+.cmp-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cmp-title h3{margin:0;font:27px/1.12 var(--serif);color:var(--ink)}
+.cmp-title .share-link-btn{margin-top:0}
+.cmp-tools{display:flex;gap:6px;margin-left:auto;order:3}
+.cmp-tools button{height:28px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:#fffdf7;font:500 11.5px/1 var(--sans);color:var(--ink);cursor:pointer}
+.cmp-tools button:hover{border-color:var(--wine)}
+.cmp-chips{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.cmp-chip{display:flex;align-items:center;gap:8px;min-width:0;padding:8px 10px;border-radius:10px;border:1.5px solid;background:#fffdf7;font:500 13px/1.25 var(--sans);text-align:left;cursor:pointer}
+.cmp-chip b{flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;color:#fff;font-size:11px}
+.cmp-chip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmp-chip svg{flex:none;width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;opacity:.7}
+.cmp-chip-a{border-color:#7f77dd;color:#3c3489}.cmp-chip-a b{background:#7f77dd}
+.cmp-chip-b{border-color:#1d9e75;color:#085041}.cmp-chip-b b{background:#1d9e75}
+.cmp-chip.is-empty{border-style:dashed;cursor:default;color:var(--muted)}
+.cmp-pick{margin:12px 0 4px;padding:14px;border:1px dashed var(--line);border-radius:10px;background:#fffdf7}
+.cmp-pick p{margin:0 0 10px;font:13px/1.5 var(--sans);color:var(--muted)}
+.cmp-search{height:30px;padding:0 13px;border:1px solid var(--wine);border-radius:999px;background:var(--wine);color:#fff8ee;font:500 12px/1 var(--sans);cursor:pointer}
+.cmp-grid{margin-top:8px}
+.cmp-row{display:grid;grid-template-columns:86px minmax(0,1fr) minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid var(--line);align-items:start}
+.cmp-row:first-child{border-top:0;padding-top:2px}
+.cmp-k{font:600 9.5px/1.35 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.cmp-k small{font-size:9px;letter-spacing:.04em;text-transform:none;font-weight:500}
+.cmp-v{display:flex;flex-direction:column;gap:3px;min-width:0}
+.feature-summary .cmp-v strong{display:flex;align-items:center;gap:6px;font:400 17px/1.2 var(--serif);color:var(--ink);font-variant-numeric:tabular-nums}
+.feature-summary .cmp-s{display:block;font:11.5px/1.4 var(--sans);color:var(--muted)}
+.cmp-bar{display:block;height:6px;border-radius:3px;background:#e9e1d3;overflow:hidden;margin-top:2px}
+.cmp-bar b{display:block;height:100%;border-radius:3px}
+.cmp-fill-a{background:#7f77dd}.cmp-fill-b{background:#1d9e75}
+.cmp-geo{display:flex;height:10px;border-radius:5px;overflow:hidden;border:1px solid rgba(40,28,22,.15)}
+.cmp-geo b{display:block;min-width:3px}
+.cmp-face .glance-compass{width:18px;height:18px}
+.cmp-owners{list-style:none;margin:4px 0 0;padding:0}
+.cmp-owners li{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font:12px/1.35 var(--sans);color:var(--ink)}
+.cmp-owners li span:last-child{flex:none;color:var(--muted);font-variant-numeric:tabular-nums}
+.cmp-both{margin-left:5px;padding:0 5px;border-radius:4px;background:#f6e3b4;color:#6b4a07;font:600 9.5px/1.6 var(--sans);font-style:normal}
+.cmp-more{margin-top:3px;padding:0;border:0;background:none;color:var(--wine);font:500 11.5px var(--sans);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.compare-btn{margin-left:6px}
+.fact-heading .share-link-btn+.compare-btn{display:inline-flex}
+.fact-heading:has(.compare-btn) .share-link-btn{display:inline-flex}
+.phone-ui .cmp-row{grid-template-columns:62px minmax(0,1fr) minmax(0,1fr);gap:8px}
+.phone-ui .feature-summary .cmp-v strong{font-size:15px}
+.phone-ui .cmp-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 12px}
+.phone-ui .cmp-k{grid-column:1/-1}
+.phone-ui .cmp-k br{display:none}
+.phone-ui .cmp-k small{margin-left:5px}
+.phone-ui .cmp-k small{display:inline}
+/* B's picker inside its card */
+.cmp-chip.is-empty{cursor:text;border-style:dashed;color:var(--ink)}
+.cmp-b-input{flex:1;min-width:0;border:0;outline:none;background:transparent;font:13px/1.3 var(--sans);color:var(--ink);padding:2px 0}
+.cmp-b-input::placeholder{color:var(--muted)}
+.cmp-chip.is-empty:focus-within{border-style:solid;box-shadow:0 0 0 3px #1d9e7522}
+.cmp-results{list-style:none;margin:8px 0 0;padding:4px;border:1px solid var(--line);border-radius:10px;background:#fffdf7;max-height:300px;overflow:auto}
+.cmp-results button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;padding:7px 9px;border:0;border-radius:7px;background:none;text-align:left;cursor:pointer}
+.cmp-results button:hover,.cmp-results button:focus-visible{background:#1d9e7514}
+.cmp-results strong{font:400 15px/1.25 var(--serif);color:var(--ink)}
+.cmp-results small{font:11px/1.35 var(--sans);color:var(--muted)}
+.cmp-none{padding:8px 9px;font:12px/1.4 var(--sans);color:var(--muted)}
+/* same-scale outlines in compare */
+.cmp-shapes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 2px}
+.cmp-shape{display:block;width:100%;height:auto;border-radius:10px;background:#fffdf7;border:1px solid var(--line)}
+.cmp-shape-fill{stroke-width:1.6;stroke-linejoin:round}
+.cmp-shape-a .cmp-shape-fill{fill:#7f77dd33;stroke:#534ab7}
+.cmp-shape-b .cmp-shape-fill{fill:#1d9e7533;stroke:#0f6e56}
+.cmp-shape-arrow{fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linecap:round;opacity:.75}
+.cmp-shape-north path,.cmp-shape-scale path{fill:none;stroke:var(--muted);stroke-width:1.2;stroke-linecap:round}
+.cmp-shape-north text,.cmp-shape-scale text{fill:var(--muted);font:600 9px var(--sans)}
+.cmp-shapes-note{grid-column:1/-1;margin:2px 0 0;font:11px/1.4 var(--sans);color:var(--muted)}
+/* detailed compare maps */
+.cmp-map-lieux{fill:none;stroke:#9c8f7a;stroke-width:.6;opacity:.55}
+.cmp-map-contour{fill:none;stroke:#a8855a;stroke-width:.5;opacity:.45}
+.cmp-map-contour.is-major{stroke-width:.9;opacity:.7}
+.cmp-map-elev{fill:#8a6a43;font:600 8px var(--sans);paint-order:stroke;stroke:#fffdf7;stroke-width:2.5px}
+.cmp-map-name{fill:#5a4a3a;font:italic 9px var(--serif);paint-order:stroke;stroke:#fffdf7;stroke-width:3px}
+.cmp-map-parcels{fill:none;stroke:#3a2d22;stroke-width:.45;opacity:.55}
+.cmp-shape-line{fill:none;stroke-width:1.8;stroke-linejoin:round}
+.cmp-shape-a .cmp-shape-line{stroke:#534ab7}.cmp-shape-b .cmp-shape-line{stroke:#0f6e56}
+.cmp-shape:has(.cmp-shape-line) .cmp-shape-fill{stroke:none}
+/* static 3D compare views */
+figure.cmp-shape{position:relative;margin:0;overflow:hidden;background:linear-gradient(#f7f2e8,#efe7d8)}
+figure.cmp-shape img{display:block;width:100%;height:auto}
+figure.cmp-shape svg{position:absolute;inset:0;width:100%;height:100%}
+.cmp-north-n{fill:var(--muted);font:600 9px var(--sans)}
+/* ---- compare panel: tighter header, one action row ---- */
+.detail-panel.is-compare{padding-top:14px}
+.detail-panel.is-compare .feature-section,.detail-panel.is-compare .feature-card{margin-top:0;padding-top:0}
+.detail-panel.is-compare .detail-close{display:none}
+.cmp-head{padding:0 0 8px}
+.cmp-title{display:flex;align-items:center;gap:10px}
+.cmp-title h3{font:400 24px/1.1 var(--serif)}
+.cmp-title .cmp-close{margin-left:auto;height:30px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:#fffdf7;font:500 12px/1 var(--sans);color:var(--ink);cursor:pointer}
+.cmp-title .cmp-close:hover{border-color:var(--wine)}
+.cmp-chips{margin-top:10px}
+.cmp-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+.cmp-act,.cmp-actions .share-link-btn{display:inline-flex;align-items:center;gap:6px;height:28px;margin:0;padding:0 11px 0 9px;border:1px solid var(--line);border-radius:999px;background:#fffdf7;font:500 11.5px/1 var(--sans);color:var(--ink);cursor:pointer}
+.cmp-act:hover,.cmp-actions .share-link-btn:hover{border-color:var(--wine)}
+.cmp-act svg{width:14px;height:14px;fill:none;stroke:var(--wine);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cmp-actions .share-link-btn{color:var(--ink)}
+.cmp-actions .share-link-btn svg{stroke:var(--wine)}
+.cmp-act-gap{flex:1}
+.cmp-shapes{margin-top:12px}
+.cmp-grid .cmp-row:first-child .cmp-s{font-size:11px}
+/* ---- bottom bar: wrap from the left when the info panel narrows the map ---- */
+@container controls (max-width:1100px){.terroir-control{margin-left:0}.terroir-control+.layers-toggle{margin-left:0!important}.scene-controls{justify-content:flex-start;column-gap:8px}}
+/* ---- bottom bar: one line always (desktop); it compacts instead of wrapping ---- */
+html:not(.phone-ui) .scene-controls{flex-wrap:nowrap!important;justify-content:flex-start;min-width:0;width:100%}
+html:not(.phone-ui) .scene-controls>*{flex:none}
+html:not(.phone-ui) .terroir-control{margin-left:auto}
+@container controls (max-width:1100px){
+  html:not(.phone-ui) .scene-controls{column-gap:6px}
+  html:not(.phone-ui) .opacity-control>.opacity-word,html:not(.phone-ui) .terroir-toggle-k{display:none}
+  html:not(.phone-ui) .terroir-control{margin-left:0}
+}
+@container controls (max-width:700px){
+  html:not(.phone-ui) .seg>button{padding:0 7px}
+  html:not(.phone-ui) .opacity-control{padding:0 9px;gap:6px}
+  html:not(.phone-ui) .opacity-control input{width:52px}
+  html:not(.phone-ui) .terroir-toggle-v,html:not(.phone-ui) .classification-toggle span:last-child,html:not(.phone-ui) .layers-toggle span{display:none}
+  html:not(.phone-ui) .classification-toggle,html:not(.phone-ui) .layers-toggle{padding:0 10px}
+  html:not(.phone-ui) .terroir-toggle{padding:0 8px}
+}
+@container controls (max-width:640px){
+  html:not(.phone-ui) .viewer-bottom{padding-left:10px;padding-right:10px}
+  html:not(.phone-ui) .scene-controls{column-gap:4px}
+  html:not(.phone-ui) .seg>button{padding:0 5px;font-size:10.5px}
+  html:not(.phone-ui) .opacity-control output{min-width:24px}
+  html:not(.phone-ui) .opacity-control input{width:42px}
+}
+@media (min-width:761px){:root:has(.detail-panel.is-compare){--info-panel-width:min(540px,44vw)}}
+@container controls (max-width:600px){
+  html:not(.phone-ui) .opacity-control output{display:none}
+  html:not(.phone-ui) .opacity-control{padding:0 8px}
+  html:not(.phone-ui) .seg>button{padding:0 4px}
+  html:not(.phone-ui) .seg{padding:2px 1px}
+  html:not(.phone-ui) .classification-toggle,html:not(.phone-ui) .layers-toggle{padding:0 7px}
+}
+@container controls (max-width:800px){html:not(.phone-ui) .classification-toggle span:last-child{display:none}html:not(.phone-ui) .classification-toggle{padding:0 10px}}
+/* chip ×: remove a cru and pick another */
+.cmp-x{flex:none;display:grid;place-items:center;width:20px;height:20px;margin-left:2px;border-radius:50%;font:400 15px/1 var(--sans);font-style:normal;color:var(--muted);cursor:pointer}
+.cmp-x:hover,.cmp-x:focus-visible{background:#28231f14;color:var(--ink);outline:none}
+/* Sun & rain is hidden while comparing */
+html:has(.detail-panel.is-compare) .sim-launch,html:has(.detail-panel.is-compare) .sim-bar{display:none!important}
+/* Sun & rain: launcher centred in the visible map; the bar compacts when the visible map is narrow */
+html:not(.phone-ui) .sim-launch{left:var(--sim-center,50%)}
+.sim-bar{container-type:inline-size;container-name:simbar}
+@container simbar (max-width:960px){.sim-bar-main{gap:8px;min-width:0}.sim-timeline{flex:1 1 60px}.sim-rise,.sim-set{font-size:10px}}
+@container simbar (max-width:900px){.sim-bar-main{gap:8px}.sim-date-field{width:84px}.sim-timeline{min-width:70px}.sim-readout{min-width:0}.sim-readout .sim-small{display:none}.sim-modes button{padding:0 9px}}
+@container simbar (max-width:760px){.sim-edge{display:none}.sim-readout{display:none}.sim-speed{display:none}}
+/* ---- default bottom bar: even spacing, one height ---- */
+html:not(.phone-ui) .scene-controls{justify-content:space-between}
+html:not(.phone-ui) .terroir-control{margin-left:0!important}
+html:not(.phone-ui) .terroir-control+.layers-toggle{margin-left:0!important}
+html:not(.phone-ui) .seg{height:32px;box-sizing:border-box}
+html:not(.phone-ui) .opacity-control,html:not(.phone-ui) .classification-toggle,html:not(.phone-ui) .terroir-toggle,html:not(.phone-ui) .layers-toggle{height:32px;box-sizing:border-box}
+html:not(.phone-ui) .classification-toggle[aria-expanded=true],html:not(.phone-ui) .layers-toggle[aria-expanded=true],html:not(.phone-ui) .terroir-toggle[aria-expanded=true],html:not(.phone-ui) .terroir-toggle.is-active{border-color:var(--line);box-shadow:inset 0 0 0 1px #7b405155;background:#7b40510c}

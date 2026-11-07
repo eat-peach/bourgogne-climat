@@ -25,6 +25,8 @@ Gzipped JSON (`.json.gz`) is shown uncompressed. Build the real files with the s
 | `dist/data` | `cadastre` | `manifest.json` | 1 | [JSON skeleton](dist/data/cadastre/manifest.json) |
 | `dist/data` | `context-textures` | `#.avif` | 24 | binary (not templated) |
 | `dist/data` | `context-textures` | `#.jpg` | 24 | binary (not templated) |
+| `dist/data` | `cruterrain` | `#.png` | 701 | binary (not templated) |
+| `dist/data` | `cruterrain` | `index.json` | 1 | [JSON skeleton](dist/data/cruterrain/index.json) |
 | `dist/data` | `feature-facts` | `#.json.gz` | 376 | [JSON skeleton](dist/data/feature-facts/_template.json) |
 | `dist/data` | `geology` | `#.json` | 376 | [JSON skeleton](dist/data/geology/_template.json) |
 | `dist/data` | `geology` | `legend.json` | 1 | [JSON skeleton](dist/data/geology/legend.json) |

@@ -132,14 +132,26 @@ export function initSimulation(renderer, button) {
 
   // The launcher button and the bar sit just above the map controls; the bar also stops short of the move pad.
   const placeBottom = () => host.style.setProperty('--sim-bottom', `${(host.querySelector('.viewer-bottom')?.offsetHeight || 0) + 12}px`);
+  // The visible map: the info panel and the village index can cover its sides. The launcher is centred in it and the
+  // bar spans it, stopping short of the move pad.
+  function visibleSpan() {
+    const hostBox = host.getBoundingClientRect(), panel = document.querySelector('.detail-panel'), side = document.querySelector('#village-sidebar')?.getBoundingClientRect();
+    let left = hostBox.left, right = hostBox.right;
+    if (panel && (panel.classList.contains('drawer-open') || panel.classList.contains('mobile-open'))) { const p = panel.getBoundingClientRect(); if (p.width > 0 && p.left < right && p.left > left + hostBox.width / 3) right = p.left; }
+    if (side && side.width > 0 && side.right > left + 1 && side.right < left + hostBox.width / 2) left = side.right;
+    for (const rail of document.querySelectorAll('.drawer-edge-left, .drawer-edge-left > *')) { const r = rail.getBoundingClientRect(); if (r.width > 0 && r.right > left && r.right < left + hostBox.width / 4 && getComputedStyle(rail).display !== 'none') left = r.right; }/* the narrow left rail */
+    return { hostBox, left, right };
+  }
+  function placeLauncher() { const { hostBox, left, right } = visibleSpan(); host.style.setProperty('--sim-center', `${Math.round((left + right) / 2 - hostBox.left)}px`); }
   function place() {
     const padBox = host.querySelector('.pan-pad');
     placeBottom(); bar.style.bottom = 'var(--sim-bottom)';
     const padVisible = padBox && padBox.offsetParent && getComputedStyle(padBox).display !== 'none';
-    const hostBox = host.getBoundingClientRect(), side = document.querySelector('#village-sidebar')?.getBoundingClientRect();
-    bar.style.setProperty('--pad-room', padVisible ? `${hostBox.right - padBox.getBoundingClientRect().left + 12}px` : '');
-    // The village index can sit over the left of the map; start the bar beyond it.
-    bar.style.setProperty('--side-room', side && side.width > 0 && side.right > hostBox.left + 1 && side.right < hostBox.right / 2 ? `${side.right - hostBox.left + 16}px` : '');
+    const { hostBox, left, right } = visibleSpan();
+    const stop = padVisible ? Math.min(right - 12, padBox.getBoundingClientRect().left - 12) : right - 16;
+    bar.style.setProperty('--pad-room', `${Math.max(16, hostBox.right - stop)}px`);
+    bar.style.setProperty('--side-room', `${Math.max(16, left - hostBox.left + 12)}px`);
+    placeLauncher();
   }
   const setMode = mode => { if (mode === state.mode) return; pause(); state.mode = mode; showPlay(false); apply(); };
   const open = () => { state.open = true; bar.hidden = false; button.setAttribute('aria-expanded', 'true'); showPlay(false); apply(); $(`[data-mode="${state.mode}"]`).focus(); };
@@ -147,8 +159,13 @@ export function initSimulation(renderer, button) {
 
   button.setAttribute('aria-expanded', 'false');
   button.addEventListener('click', () => state.open ? close() : open());
-  addEventListener('resize', () => { placeBottom(); if (state.open) place(); });
-  placeBottom();
+  addEventListener('resize', () => { placeBottom(); placeLauncher(); if (state.open) place(); });
+  placeBottom(); placeLauncher();
+  // the info panel opening or closing changes the visible map
+  const watched = document.querySelector('.detail-panel');
+  if (watched && typeof MutationObserver === 'function') new MutationObserver(() => { const again = () => { placeLauncher(); if (state.open) place(); }; requestAnimationFrame(again); setTimeout(again, 260); }).observe(watched, { attributes: true, attributeFilter: ['class', 'style'] });
+  watched?.addEventListener('transitionend', () => { placeLauncher(); if (state.open) place(); });/* the panel slides in: measure again once it has arrived */
+  if (watched && typeof ResizeObserver === 'function') new ResizeObserver(() => { placeLauncher(); if (state.open) place(); }).observe(watched);
   const controls = host.querySelector('.viewer-bottom');
   if (controls && typeof ResizeObserver === 'function') new ResizeObserver(() => { placeBottom(); }).observe(controls);
   bar.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));

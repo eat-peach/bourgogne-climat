@@ -6,7 +6,7 @@ import { findWineRegion, groupVillagesByWineRegion, setWineRegions, wineRegionOp
 import { loadRegion, REGION, regionClass, term } from './region.js';
 import { aocFactLines, featureIdentity, mergeFeatureFacts, spatialAocMatches } from './aoc-facts.js';
 import { areaText, featureArea, renderFeaturePanel, glanceTile, displayPlaceName, placeHeading, displayEntityName, displayRecordDate, element, detailRow, communeDisplayName } from './feature-panel.js';
-import { exportMapImage } from './export-map.js';
+import { exportMapImage, escapeFilename } from './export-map.js';
 import { correctionPrompt, openSubmissionDialog } from './feedback.js';
 import { initDisplaySettings } from './display-settings.js';
 import { initSimulation } from './simulation-panel.js';
@@ -29,8 +29,10 @@ function setProgress(n,text,detail){ui.progress.style.width=`${n}%`;if(text)ui.l
 async function fetchJson(url,signal){const res=await fetch(url,{signal});if(!res.ok)throw new Error(`Request failed (${res.status})`);return res.json();}
 async function fetchScene(url,signal){const res=await fetch(url,{signal});if(!res.ok)throw new Error(`Request failed (${res.status})`);const bytes=new Uint8Array(await res.arrayBuffer());const gzipped=bytes.length>=2&&bytes[0]===0x1f&&bytes[1]===0x8b;if(!gzipped){try{return JSON.parse(new TextDecoder().decode(bytes));}catch(error){throw new Error(`Scene payload is not valid JSON: ${error.message||error}`);}}if(typeof DecompressionStream!=='function')throw new Error('This browser cannot open compressed scene payloads because DecompressionStream is unavailable. Please use a current browser.');try{return await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).json();}catch(error){if(error.name==='AbortError')throw error;throw new Error(`Unable to decompress scene payload: ${error.message||error}`);}}
 async function loadIndex(){setProgress(20,'Reading the atlas…','Loading lieux-dits');const url=new URL('./data/index.json',location.href);const data=await fetchJson(url);if(!Array.isArray(data.villages)||!data.villages.length)throw new Error(`The atlas index contains no ${term('village')} scenes.`);assetVersion=String(data.assetVersion||'');for(const v of data.villages){v.name=communeDisplayName(v.name);for(const key of ['scene','texture','textureAvif'])if(v[key])v[key]=dataUrl(v[key]).href;}data.__url=url.href;return data;}
-function villageFromHash(){let id='';try{id=decodeURIComponent(location.hash.slice(1));}catch{}return index?.villages?.find(v=>v.id===id)||null;}
-function writeVillageHash(id,mode){const hash=`#${encodeURIComponent(id)}`;if(mode==='none'||location.hash===hash)return;history[mode==='push'?'pushState':'replaceState'](null,'',hash);}
+// The address is #<village>?sel=…&owner=…&shade=…&cam=… (see "Shareable links" below); a bare #<village> still works.
+function hashParts(){const raw=location.hash.slice(1),q=raw.indexOf('?');let id=q<0?raw:raw.slice(0,q);try{id=decodeURIComponent(id);}catch{}return {id,params:new URLSearchParams(q<0?'':raw.slice(q+1))};}
+function villageFromHash(){const {id}=hashParts();return index?.villages?.find(v=>v.id===id)||null;}
+function writeVillageHash(id,mode){if(mode==='none'||shareRestoring)return;const hash=shareHash(id);if(location.hash===hash)return;history[mode==='push'&&hashParts().id!==id?'pushState':'replaceState'](null,'',hash);}
 async function loadOptionalPayload(url){try{const res=await fetch(url);if(!res.ok)return null;const bytes=new Uint8Array(await res.arrayBuffer());const gzipped=bytes.length>=2&&bytes[0]===0x1f&&bytes[1]===0x8b;if(!gzipped)return JSON.parse(new TextDecoder().decode(bytes));if(typeof DecompressionStream!=='function')return null;return await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).json();}catch{return null;}}
 function setCadastreStatus(message,kind=''){const el=$('#cadastre-status');if(el){el.textContent=message||'';el.dataset.state=kind;el.hidden=!message;}}
 function refreshCadastre(view) {
@@ -92,7 +94,7 @@ function setupSheet(){
     setTimeout(()=>{panel.style.transition='';panel.style.height='';if(name==='close')closeSheet();else setSheet(name);},300);};
   panel.addEventListener('touchend',settle,{passive:true});panel.addEventListener('touchcancel',settle,{passive:true});
 }
-function clearFeatureSelection(){selectedFeature=null;featureFactsRequest+=1;const card=$('#feature-card');if(card){card.classList.remove('feature-summary');card.replaceChildren();const strong=document.createElement('strong');strong.textContent='Click the terrain';const span=document.createElement('span');span.textContent='Explore a parcel or lieu-dit';card.append(strong,span);}}
+function clearFeatureSelection(){if(compare&&!compare.flying)endCompare(false);selectedFeature=null;scheduleShareSync();featureFactsRequest+=1;const card=$('#feature-card');if(card){card.classList.remove('feature-summary');card.replaceChildren();const strong=document.createElement('strong');strong.textContent='Click the terrain';const span=document.createElement('span');span.textContent='Explore a parcel or lieu-dit';card.append(strong,span);}}
 function safeUrl(value){const raw=String(value??'').trim();if(!raw||!/^https?:\/\//i.test(raw))return null;try{const url=new URL(raw);return /^https?:$/.test(url.protocol)&&Boolean(url.hostname)?url.href:null;}catch{return null;}}
 function elevationFact(feature,meta={}) {
   if(meta.altitude?.status==='estimate' && meta.altitude.valueM!=null && Number.isFinite(Number(meta.altitude.valueM))) return {value:`≈ ${Math.round(meta.altitude.valueM)} m`,caption:'Terrain estimate near the mapped centre'};
@@ -126,7 +128,7 @@ function renderFeatureFacts(feature,layer,meta){
 }
 function displayPlaceNameSafe(value){return String(value??'').trim().slice(0,200);}
 
-async function showFeatureFacts(feature,layer,provenance){if(layer==='cadastre'){selectedFeature={feature,layer,provenance};renderCadastreFacts(feature,provenance);appendOwnershipFacts(feature,provenance,++ownershipRequest);appendParcelContext(feature,provenance);const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();return;}if(!feature){clearFeatureSelection();return;}const p=feature.properties||feature||{}, nested=p.facts||p.rawPropertyFacts||p.raw_property_facts||p.rawProperties?.facts||p.raw?.facts||{}, factsKey=provenance?.factsKey||p.factsKey||nested.factsKey||nested.key, villageId=provenance?.factsVillageId||p.factsVillageId||p.facts_village_id||nested.factsVillageId||nested.villageId||nested.village_id||provenance?.sourceVillageId, request=++featureFactsRequest;selectedFeature={feature,layer,provenance};const payload=factsKey&&villageId?await loadFeatureFacts(villageId):null;if(request!==featureFactsRequest||selectedFeature?.feature!==feature)return;const candidates=factsKey?(payload?.features||[]).filter(row=>row.key===factsKey):[];const meta=candidates.length===1?candidates[0]:null;renderFeatureFacts(feature,layer,meta);appendTerroirFacts(feature,layer,request);appendGeologyFacts(feature,layer,request);const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();const toggle=$('.details-toggle');if(toggle){toggle.textContent='Close info';toggle.hidden=true;toggle.setAttribute('aria-expanded','true');toggle.setAttribute('aria-label','Close info');}}
+async function showFeatureFacts(feature,layer,provenance){if(compare&&compareIntercept(feature,layer,provenance))return;if(layer==='cadastre'){selectedFeature={feature,layer,provenance};renderCadastreFacts(feature,provenance);appendOwnershipFacts(feature,provenance,++ownershipRequest);appendParcelContext(feature,provenance);addShareButton($('#feature-card'));addParcelCompareButton($('#feature-card'),provenance);scheduleShareSync();const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();return;}if(!feature){clearFeatureSelection();return;}const p=feature.properties||feature||{}, nested=p.facts||p.rawPropertyFacts||p.raw_property_facts||p.rawProperties?.facts||p.raw?.facts||{}, factsKey=provenance?.factsKey||p.factsKey||nested.factsKey||nested.key, villageId=provenance?.factsVillageId||p.factsVillageId||p.facts_village_id||nested.factsVillageId||nested.villageId||nested.village_id||provenance?.sourceVillageId, request=++featureFactsRequest;selectedFeature={feature,layer,provenance};const payload=factsKey&&villageId?await loadFeatureFacts(villageId):null;if(request!==featureFactsRequest||selectedFeature?.feature!==feature)return;const candidates=factsKey?(payload?.features||[]).filter(row=>row.key===factsKey):[];const meta=candidates.length===1?candidates[0]:null;renderFeatureFacts(feature,layer,meta);appendTerroirFacts(feature,layer,request);appendGeologyFacts(feature,layer,request);addShareButton($('#feature-card'));addCompareButton($('#feature-card'),feature,layer,provenance);scheduleShareSync();const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();const toggle=$('.details-toggle');if(toggle){toggle.textContent='Close info';toggle.hidden=true;toggle.setAttribute('aria-expanded','true');toggle.setAttribute('aria-label','Close info');}}
 // ---- Terroir: slope, aspect, elevation and modelled sun hours per lieu-dit and AOC area
 // (data/terroir/<village>.json, scripts/build_terroir.py) ----
 const terroirCache=new Map();let terroirMode='off',terroirRedraw=0;
@@ -162,7 +164,7 @@ function terroirLegend(){let el=$('#terroir-legend');if(!el){el=document.createE
   if(terroirMode==='aspect'){el.innerHTML='<span class="tl-title">Aspect: which way it faces</span><div class="tl-wheel" aria-hidden="true"><i style="background:conic-gradient(from 0deg,hsl(220 80% 55%),hsl(165 80% 50%) 12.5%,hsl(50 85% 55%) 25%,hsl(24 85% 55%) 37.5%,hsl(2 85% 55%) 50%,hsl(330 80% 55%) 62.5%,hsl(282 80% 55%) 75%,hsl(250 80% 55%) 87.5%,hsl(220 80% 55%))"></i><b class="n">N</b><b class="e">E</b><b class="s">S</b><b class="w">W</b></div><small>Paler where the ground is flatter.</small>';return;}
   const sc=TERROIR_SCALES[terroirMode];el.innerHTML=`<span class="tl-title">${sc.label}</span><i class="tl-bar" style="background:linear-gradient(90deg,${sc.stops.map(c=>`rgb(${c.join(',')})`).join(',')})"></i><span class="tl-ends"><span>${sc.min.toLocaleString('en')}${sc.unit}</span><span>${sc.max.toLocaleString('en')}${sc.unit}+</span></span>${terroirMode==='sun'?'<small>Clear-sky model with hill shading.</small>':''}`;}
 let terroirScaleLoaded=null;function loadTerroirScale(){terroirScaleLoaded||=fetchJson(dataUrl('./data/terroir/scale.json')).then(d=>{if(d?.sunHours){TERROIR_SCALES.sun.min=d.sunHours[0];TERROIR_SCALES.sun.max=d.sunHours[1];}if(d?.slopePct)TERROIR_SCALES.slope.max=Math.max(10,d.slopePct[1]);}).catch(()=>{});return terroirScaleLoaded;}
-async function setTerroirMode(mode){await loadTerroirScale();terroirMode=['slope','aspect','sun','geology'].includes(mode)?mode:'off';document.querySelectorAll('input[name="terroir-mode"]').forEach(i=>{i.checked=i.value===terroirMode;});if(terroirMode==='geology')await loadGeologyLegend();renderer?.setTerroirTint?.(terroirMode==='off'||terroirMode==='geology'?null:terroirTint);renderer?.setGeologyLayer?.(terroirMode==='geology'?geologyLayer:null);terroirLegend();syncTerroirControl();}
+async function setTerroirMode(mode){await loadTerroirScale();terroirMode=['slope','aspect','sun','geology'].includes(mode)?mode:'off';document.querySelectorAll('input[name="terroir-mode"]').forEach(i=>{i.checked=i.value===terroirMode;});if(terroirMode==='geology')await loadGeologyLegend();renderer?.setTerroirTint?.(terroirMode==='off'||terroirMode==='geology'?null:terroirTint);renderer?.setGeologyLayer?.(terroirMode==='geology'?geologyLayer:null);terroirLegend();syncTerroirControl();scheduleShareSync();}
 // ---- Geology: BRGM BD Charm-50, 1:50,000 (data/geology/, scripts/build_geology.py) ----
 let geologyLegendPromise=null,geologyLegendData=null;const geologyTiles=new Map();let geologyLegendTimer=0;
 function loadGeologyLegend(){geologyLegendPromise||=fetchJson(dataUrl('./data/geology/legend.json')).then(d=>{geologyLegendData=d;d.tileSet=new Set(d.tiles||[]);return d;}).catch(()=>null);return geologyLegendPromise;}
@@ -287,7 +289,7 @@ function ownerGroupHtml(owners,q){if(!owners.length)return '';return `<div class
 // An owner's card in the index: totals, then the communes where they hold parcels; choosing one outlines them on the map.
 // The open owner card survives list refreshes (the map changing village redraws the list) until Back or a new search.
 let ownerShown=null,ownerCommuneIndex=0;
-function showOwner(o){if(!o)return;ownerShown=o;ownerCommuneIndex=0;drawOwnerCard(true);}
+function showOwner(o){if(!o)return;ownerShown=o;ownerCommuneIndex=0;drawOwnerCard(true);scheduleShareSync();}
 // Where an owner's parcels lie (data/ownership/owner-crus.json.gz, scripts/build_owner_crus.py): per parcel the grand
 // or premier cru and the lieu-dit it falls in. Loaded with the first owner card.
 let ownerCrusPromise=null,ownerCrus=null;
@@ -297,8 +299,8 @@ function ownerGroups(ids){if(!ownerCrus)return [];const groups=new Map();for(con
   return [...groups.values()].sort((a,b)=>((CRU_RANK[a.cls]??(a.kind==='other'?3:2))-(CRU_RANK[b.cls]??(b.kind==='other'?3:2)))||(b.ids.length-a.ids.length)||a.name.localeCompare(b.name));}
 const classLabel=cls=>cls==='grand-cru'?'Grand Cru':cls==='premier-cru'?'Premier Cru':'';
 function drawOwnerCard(openFirst=false){const o=ownerShown;if(!o)return;if(!ownerCrus)loadOwnerCrus();const communes=Object.entries(o.communes).map(([code,ids])=>({code,ids:ids.split(','),village:communeVillage(code)})).sort((a,b)=>b.ids.length-a.ids.length);
-  ui.list.innerHTML=`<div class="owner-card"><button type="button" class="owner-back">← Back to results</button><h3>${esc(o.name)}</h3><p class="owner-meta">${esc(ownerSummary(o))}</p>${o.siren&&/^\d{9}$/.test(o.siren)?`<p class="owner-meta">SIREN <a href="https://annuaire-entreprises.data.gouv.fr/entreprise/${o.siren}" target="_blank" rel="noopener">${o.siren}</a></p>`:''}<p class="owner-note">Parcels held by this legal entity in the DGFiP register (2025). Areas are whole parcels, also counted for co-owners. Private individuals are not in this register.</p><div class="owner-communes">${communes.map((c,i)=>`<button type="button" class="village-row owner-commune" data-i="${i}"><strong>${esc(c.village?.name||c.code)}</strong><small>${c.ids.length} parcel${c.ids.length===1?'':'s'}</small></button>${ownerGroups(c.ids).map((g,k)=>`<button type="button" class="village-row owner-cru${g.kind==='other'?' is-other':''}" data-i="${i}" data-g="${k}"><strong>${esc(g.name)}${g.cls?` <em class="cru-class cru-class--${g.cls}">${classLabel(g.cls)}</em>`:''}</strong><small>${g.ids.length}</small></button>`).join('')}`).join('')}</div>${ownerCrus?'<p class="owner-note">Crus and lieux-dits are where each parcel lies, not who farms it or whose label the wine goes under.</p>':'<p class="owner-note owner-loading">Finding crus…</p>'}</div>`;
-  ui.list.querySelector('.owner-back').addEventListener('click',()=>{ownerShown=null;renderer?.showOwnerParcels([]);renderList();ownerSearchInput()?.focus();});
+  ui.list.innerHTML=`<div class="owner-card"><div class="owner-card-top"><button type="button" class="owner-back">← Back to results</button></div><h3>${esc(o.name)}</h3><p class="owner-meta">${esc(ownerSummary(o))}</p>${o.siren&&/^\d{9}$/.test(o.siren)?`<p class="owner-meta">SIREN <a href="https://annuaire-entreprises.data.gouv.fr/entreprise/${o.siren}" target="_blank" rel="noopener">${o.siren}</a></p>`:''}<p class="owner-note">Parcels held by this legal entity in the DGFiP register (2025). Areas are whole parcels, also counted for co-owners. Private individuals are not in this register.</p><div class="owner-communes">${communes.map((c,i)=>`<button type="button" class="village-row owner-commune" data-i="${i}"><strong>${esc(c.village?.name||c.code)}</strong><small>${c.ids.length} parcel${c.ids.length===1?'':'s'}</small></button>${ownerGroups(c.ids).map((g,k)=>`<button type="button" class="village-row owner-cru${g.kind==='other'?' is-other':''}" data-i="${i}" data-g="${k}"><strong>${esc(g.name)}${g.cls?` <em class="cru-class cru-class--${g.cls}">${classLabel(g.cls)}</em>`:''}</strong><small>${g.ids.length}</small></button>`).join('')}`).join('')}</div>${ownerCrus?'<p class="owner-note">Crus and lieux-dits are where each parcel lies, not who farms it or whose label the wine goes under.</p>':'<p class="owner-note owner-loading">Finding crus…</p>'}</div>`;
+  addShareButton(ui.list.querySelector('.owner-card-top'));ui.list.querySelector('.owner-back').addEventListener('click',()=>{ownerShown=null;scheduleShareSync();renderer?.showOwnerParcels([]);renderList();ownerSearchInput()?.focus();});
   ui.list.querySelectorAll('.owner-commune').forEach(b=>{b.classList.toggle('is-active',Number(b.dataset.i)===ownerCommuneIndex);b.addEventListener('click',()=>{ownerCommuneIndex=Number(b.dataset.i);ui.list.querySelectorAll('.owner-commune').forEach(x=>x.classList.toggle('is-active',x===b));showOwnerCommune(communes[ownerCommuneIndex]);});});
   ui.list.querySelectorAll('.owner-cru:not(.is-other)').forEach(b=>b.addEventListener('click',()=>{const c=communes[Number(b.dataset.i)],g=ownerGroups(c.ids)[Number(b.dataset.g)];ui.list.querySelectorAll('.owner-commune,.owner-cru').forEach(x=>x.classList.toggle('is-active',x===b));goToOwnerGroup(c,g);}));
   if(openFirst)showOwnerCommune(communes[0]);}
@@ -432,7 +434,7 @@ function cruGroupHtml(crus,q){
   const villageName=id=>index.villages.find(v=>v.id===id)?.name||'';
   return `<div class="region-group cru-group"><div class="region-heading cru-heading"><strong>${esc(term('searchGroup'))}</strong><small>${crus.length}</small><span></span></div><div class="region-villages"><div class="region-villages-inner">${crus.map((c,i)=>`<button type="button" class="village-row cru-row" data-cru="${i}"><strong>${esc(c.name)}</strong><small>${esc(regionClass(c.class)?.label||(c.class==='grand-cru'?'Grand Cru':'Premier Cru'))} · ${esc(villageName(c.village))}</small></button>`).join('')}</div></div></div>`;
 }
-async function selectCru(cru){
+async function selectCru(cru){if(compare&&!compare.flying&&(compare.picking||compare.repick)){setCompareFromCru(cru);return;}
   const village=cru&&index.villages.find(v=>v.id===cru.village);if(!village)return;
   $('.sidebar').classList.remove('is-open');// on phones the index covers the map
   if(selected?.id!==village.id)await selectVillage(village);
@@ -440,6 +442,7 @@ async function selectCru(cru){
   const layer=cru.layer||'parcels',item=renderer.featureIndex?.find(it=>it.key===layer&&String((it.feature?.properties||it.feature)?.id)===String(cru.id));
   if(!item)return;
   renderer.focusFeature(item.feature);renderer.selectFeature(item.feature,layer);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>showBestView(item.feature,layer)));/* after the info panel opens, so the cru is centred in what is left visible */
 }
 // A region page (e.g. /rhone/) declares <meta name="atlas-region" content="data/region.json">: its classes,
 // browsing groups and name replace the Burgundy defaults before the atlas starts.
@@ -637,7 +640,7 @@ const leftDrawer=drawer(sidebar,'left',`${term('village')} index`),rightDrawer=d
   const mosaicOptions={maxLoadedScenes:12,gridSize:257,coverage:1.8,minHalfSize:3000};
   mosaic=new SceneMosaic({index,loadScene,textureManifest,textureBase:new URL('./',location.href).href,backgroundSources:contextTerrain,boundaries:communeBoundaries,cacheLimit:0,preferAvif:useAvif,...mosaicOptions});
   useMosaicWorker(mosaic,{index,textureManifest,options:mosaicOptions});
-  renderer=new AtlasRenderer({canvas:$('#terrain-canvas'),container:$('#canvas-stage'),labels:$('#map-labels'),labelObstacles,progressiveBuild:true,onViewChange:view=>streamView(view),onSelect:(feature,layer,provenance)=>{const p=feature?.properties||feature||{};const classification=p.classification||p.category;const title=p.name||p.nom||'Lieu-dit';const source=layer==='parcels'?'INAO':(layer==='climats'||layer==='climat')?'DGFiP / Etalab':layer==='buildings'||layer==='roads'||layer==='forest'?'IGN BD TOPO':'Atlas source';showFeatureFacts(feature,layer,provenance);},onError:(e)=>debug.resourceErrors.push(String(e))});
+  renderer=new AtlasRenderer({canvas:$('#terrain-canvas'),container:$('#canvas-stage'),labels:$('#map-labels'),labelObstacles,progressiveBuild:true,onViewChange:view=>{streamView(view);scheduleShareSync();},onSelect:(feature,layer,provenance)=>{const p=feature?.properties||feature||{};const classification=p.classification||p.category;const title=p.name||p.nom||'Lieu-dit';const source=layer==='parcels'?'INAO':(layer==='climats'||layer==='climat')?'DGFiP / Etalab':layer==='buildings'||layer==='roads'||layer==='forest'?'IGN BD TOPO':'Atlas source';showFeatureFacts(feature,layer,provenance);},onError:(e)=>debug.resourceErrors.push(String(e))});
   renderer.setCommuneBoundaries?.(communeBoundaries);
   if(/[?&]debug\b/.test(location.search))debug.renderer=renderer;
   document.querySelectorAll('.interaction-mode').forEach(button=>button.addEventListener('click',()=>{interactionMode=button.dataset.interaction==='pan'?'pan':'rotate';document.querySelectorAll('.interaction-mode').forEach(item=>{const active=item.dataset.interaction===interactionMode;item.classList.toggle('is-active',active);item.setAttribute('aria-pressed',String(active));});renderer.setInteraction?.(interactionMode);updateInteractionHint();}));
@@ -645,7 +648,10 @@ const leftDrawer=drawer(sidebar,'left',`${term('village')} index`),rightDrawer=d
   if(matchMedia('(pointer: coarse)').matches)document.querySelector('.interaction-mode[data-interaction="pan"]')?.click();
   renderer.setInteraction?.(interactionMode);
   const aocOpacity=$('#aoc-opacity'),aocOutput=$('#aoc-opacity-value');if(aocOpacity){const syncAocOpacity=()=>{const percent=Math.max(0,Math.min(100,Number(aocOpacity.value)||0));if(aocOutput)aocOutput.textContent=`${percent}%`;renderer.setAocOpacity?.(percent/100);};aocOpacity.addEventListener('input',syncAocOpacity);aocOpacity.addEventListener('change',syncAocOpacity);syncAocOpacity();}
-  regionalNavigator=buildRegionalNav();renderList();const panelToggle=$('#panel-toggle');if(panelToggle)panelToggle.addEventListener('click',()=>{const panel=document.querySelector('.sidebar');if(matchMedia('(min-width:761px)').matches){const p=window.atlasDrawers?.left;if(p){syncPin(p.pin,false);p.closeNow();}panel.classList.remove('is-collapsed');syncPanelToggle(panelToggle,false);}else{panel.classList.remove('is-open','is-collapsed','drawer-open');syncPanelToggle(panelToggle,false);}});selectVillage(villageFromHash()||index.villages.find(v=>/vosne/i.test(v.name))||index.villages[0],{history:'replace'});window.addEventListener('hashchange',()=>{const v=villageFromHash();if(v&&v.id!==selected?.id)selectVillage(v,{history:'none'});});
+  regionalNavigator=buildRegionalNav();renderList();const panelToggle=$('#panel-toggle');if(panelToggle)panelToggle.addEventListener('click',()=>{const panel=document.querySelector('.sidebar');if(matchMedia('(min-width:761px)').matches){const p=window.atlasDrawers?.left;if(p){syncPin(p.pin,false);p.closeNow();}panel.classList.remove('is-collapsed');syncPanelToggle(panelToggle,false);}else{panel.classList.remove('is-open','is-collapsed','drawer-open');syncPanelToggle(panelToggle,false);}});const linkParams=hashParts().params;shareRestoring=[...linkParams.keys()].length>0;
+  Promise.resolve(selectVillage(villageFromHash()||index.villages.find(v=>/vosne/i.test(v.name))||index.villages[0],{history:'replace'})).then(()=>applyShare(linkParams));
+  window.addEventListener('hashchange',async()=>{const {params}=hashParts(),v=villageFromHash();if(v&&v.id!==selected?.id){shareRestoring=[...params.keys()].length>0;await selectVillage(v,{history:'none'});}applyShare(params);});
+  setupShareButtons();
   ui.search.addEventListener('input',renderList);setupSheet();setupAtlasSwitch();
   document.querySelectorAll('.exag').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.exag').forEach(x=>x.classList.remove('is-active'));b.classList.add('is-active');renderer.setExaggeration(Number(b.dataset.exag));}));
   // A region can open at its own terrain exaggeration (the Northern Rhône slopes are steep enough at 2x).
@@ -708,6 +714,335 @@ async function appendOwnershipFacts(feature,provenance,request){
 document.addEventListener('change',event=>{
   if(event.target.matches?.('[data-layer="cadastre"]') && renderer) refreshCadastre(renderer.getView());
 });
+// ---- Compare two crus ----
+// "Compare" on a lieu-dit or AOC area makes it A; the next lieu-dit or AOC area picked on the map, in search or on the
+// navigator becomes B, wherever it is in the region (B's facts load from its own village files; the map does not move).
+// A and B chips fly the camera to each. Owners are the legal entities in the DGFiP register whose parcels lie in the
+// cru (data/ownership/owner-crus.json.gz), with each parcel's recorded cadastral area.
+let compare=null;
+const fprops=f=>f?.properties||f||{};
+const sameSide=(s,feature,layer)=>s&&s.layer===layer&&String(s.id)===String(fprops(feature).id);
+function openInfoPanel(feature){const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();}
+async function compareSide(feature,layer,provenance,villageHint){
+  const p=fprops(feature),nested=p.facts||{},factsKey=provenance?.factsKey||p.factsKey||nested.factsKey||nested.key;
+  const villageId=provenance?.factsVillageId||p.factsVillageId||provenance?.sourceVillageId||villageHint||terroirVillage(feature,layer);
+  const payload=factsKey&&villageId?await loadFeatureFacts(villageId):null,cand=factsKey?(payload?.features||[]).filter(r=>r.key===factsKey):[],meta=cand.length===1?cand[0]:null;
+  const facts=mergeFeatureFacts(feature,meta),identity=featureIdentity(facts,layer),area=featureArea(facts);
+  const [terroir,geo]=await Promise.all([terroirFacts(feature,layer),Promise.all([loadGeologyLegend(),loadGeologyFeatures(terroirVillage(feature,layer))]).then(([L,d])=>(d?.features?.[`${layer}:${p.id}`]||[]).filter(([u])=>L?.units?.[u]))]);
+  const village=Array.isArray(facts.featureCommunes)?facts.featureCommunes.join(' / '):featureVillage(p.insee||p.communeCode||String(p.id||'').split(':')[0])||index.villages.find(v=>v.id===villageId)?.name||'';
+  return {feature,layer,id:p.id,villageId,name:displayPlaceName(p.displayName||p.name||p.nom||meta?.name||'Mapped place'),village,tier:identity.tier,area:area?.value,terroir,geo,owners:undefined};}
+const cadastreAreaCache=new Map();
+function cadastreAreas(code){if(!cadastreAreaCache.has(code))cadastreAreaCache.set(code,fetchScene(dataUrl(`./data/cadastre/${code}.json.gz`)).then(c=>{const m=new Map();for(const f of (c?.parcels||c?.features||[])){const q=fprops(f);if(q.id)m.set(q.id,Number(q.cadastralAreaM2)||Number(q.mappedAreaM2)||0);}return m;}).catch(()=>new Map()));return cadastreAreaCache.get(code);}
+let ownersByParcel=null;
+async function parcelOwners(){if(ownersByParcel)return ownersByParcel;const list=await loadOwners(),m=new Map();(list||[]).forEach((o,i)=>{for(const ids of Object.values(o.communes||{}))for(const id of String(ids).split(','))if(id){let a=m.get(id);if(!a)m.set(id,a=[]);a.push(i);}});return ownersByParcel=m;}
+async function compareOwners(side){await loadOwnerCrus();const oc=ownerCrus;if(!oc?.parcels)return null;
+  const ids=Object.entries(oc.parcels).filter(([,v])=>side.layer==='parcels'?String(v[0])===String(side.id):String(v[1])===String(side.id)).map(([k])=>k);
+  if(!ids.length)return {total:0,entities:[]};
+  const [byParcel,list]=await Promise.all([parcelOwners(),loadOwners()]),areas=new Map();
+  for(const code of [...new Set(ids.map(id=>id.slice(0,5)))]){const m=await cadastreAreas(code);for(const id of ids)if(id.startsWith(code)&&m.has(id))areas.set(id,m.get(id));}
+  const per=new Map();let total=0;for(const id of ids){const a=areas.get(id)||0;total+=a;for(const i of byParcel.get(id)||[]){const e=per.get(i)||{o:list[i],area:0,parcels:0};e.area+=a;e.parcels++;per.set(i,e);}}
+  return {total,entities:[...per.values()].sort((x,y)=>y.area-x.area||x.o.name.localeCompare(y.o.name))};}
+async function startCompare(feature,layer,provenance){loadCruIndex();closeSunAndRain();const a=await compareSide(feature,layer,provenance);compare={a,b:null,picking:true,flying:false,expanded:{},viewing:'a'};renderCompare();openInfoPanel(feature);requestAnimationFrame(()=>requestAnimationFrame(()=>showBestView(feature,layer,a.terroir)));scheduleShareSync();loadSideOwners(a);}
+async function setCompareB(feature,layer,provenance,villageHint){return setCompareSide(compare?.repick||'b',feature,layer,provenance,villageHint);}
+async function setCompareSide(slot,feature,layer,provenance,villageHint){if(!compare||!feature)return;renderer?.setCompareOutlines?.([]);const other=slot==='a'?compare.b:compare.a;if(sameSide(other,feature,layer)||sameSide(compare[slot],feature,layer)){compare.repick=null;renderCompare();return;}
+  const token=Symbol();compare.pending=token;compare.picking=false;compare.repick=null;compare.viewing=null;compare[slot]={name:displayPlaceName(fprops(feature).displayName||fprops(feature).name||''),loading:true};renderCompare();
+  const side=await compareSide(feature,layer,provenance,villageHint);if(!compare||compare.pending!==token)return;compare[slot]=side;compare.expanded={};compare.geom=null;renderCompare();scheduleShareSync();loadSideOwners(side);}
+async function loadSideOwners(side){const o=await compareOwners(side).catch(()=>null);side.owners=o;if(compare?.b&&!compare.b.loading&&!compare.a.loading&&!compare.repick&&(compare.a===side||compare.b===side))renderCompare();/* owners show only once B is chosen; no redraw while B is being typed */}
+async function sideFromRef(ref){const m=/^(climats|parcels):(.+)@(.+)$/.exec(ref||'');if(!m)return null;const [,layer,id,villageId]=m,v=index.villages.find(x=>x.id===villageId);if(!v)return null;const scene=await loadScene(v);const feature=(layer==='climats'?scene.climats:scene.parcels||[]).find(f=>String(fprops(f).id)===String(id));return feature?{feature,layer,villageId}:null;}
+async function setCompareFromCru(cru){const r=await sideFromRef(`${cru.layer||'parcels'}:${cru.id}@${cru.village}`);window.atlasSearchDrop?.close();if(r)setCompareB(r.feature,r.layer,{factsVillageId:r.villageId},r.villageId);}
+async function restoreCompare(cmp){const [ra,rb]=String(cmp).split(',');const A=await sideFromRef(ra),B=await sideFromRef(rb);if(!A||!B)return;const a=await compareSide(A.feature,A.layer,{factsVillageId:A.villageId},A.villageId),b=await compareSide(B.feature,B.layer,{factsVillageId:B.villageId},B.villageId);compare={a,b,picking:false,flying:false,expanded:{},viewing:selected?.id===b.villageId&&selected?.id!==a.villageId?'b':'a'};closeSunAndRain();renderCompare();openInfoPanel(A.feature);loadSideOwners(a);loadSideOwners(b);}
+function endCompare(rerender=true){if(!compare)return;const a=compare.a;compare=null;renderer?.setCompareOutlines?.([]);$('.detail-panel')?.classList.remove('is-compare');$('#feature-card')?.classList.remove('is-compare');scheduleShareSync();if(rerender&&a?.feature){const item=renderer?.featureIndex?.find(it=>it.key===a.layer&&String(fprops(it.feature).id)===String(a.id));if(item)renderer.selectFeature(item.feature,a.layer);else showFeatureFacts(a.feature,a.layer,{factsVillageId:a.villageId});}}
+function compareIntercept(feature,layer,provenance){
+  if(!feature){renderCompare();return true;}
+  if(!compare.picking&&!compare.repick&&!compare.flying){renderCompare();return true;}/* both crus chosen: clicks on the map no longer replace them (use × or double-click on a chip) *//* a scene change or an empty click keeps the comparison; Done or closing the panel ends it */
+  if(layer==='cadastre'){const host=cruUnderParcel(provenance);if(!host){endCompare(false);return false;}feature=host.feature;layer=host.layer;provenance={};}/* a parcel stands for the grand or premier cru (else the lieu-dit) it lies in */
+  if(layer!=='climats'&&layer!=='parcels')return false;
+  selectedFeature={feature,layer,provenance};
+  if(compare.flying)return true;
+  if(sameSide(compare.a,feature,layer)||sameSide(compare.b,feature,layer)){renderCompare();openInfoPanel(feature);return true;}
+  setCompareB(feature,layer,provenance);openInfoPanel(feature);return true;}
+// The grand or premier cru (smallest one, if several overlap) under a cadastral parcel's centre, else its lieu-dit.
+function cruUnderParcel(prov){const ring=prov?.parcelRing;if(!ring?.length||!renderer)return null;const c=[ring.reduce((a,q)=>a+q[0],0)/ring.length,ring.reduce((a,q)=>a+q[1],0)/ring.length];
+  const crus=new Map((cruIndex||[]).map(x=>[String(x.id),x]));let best=null;
+  for(const it of renderer.featureIndex||[]){if(it.key!=='parcels'||!it.ring||(it.bounds&&(c[0]<it.bounds[0]||c[0]>it.bounds[2]||c[1]<it.bounds[1]||c[1]>it.bounds[3])))continue;if(!renderer.inside(c,it.ring)||(it.holes||[]).some(h=>renderer.inside(c,h)))continue;const cr=crus.get(String(fprops(it.feature).id));if(!cr||!['grand-cru','premier-cru'].includes(cr.class))continue;const area=it.bounds?(it.bounds[2]-it.bounds[0])*(it.bounds[3]-it.bounds[1]):Infinity;if(!best||area<best.area)best={feature:it.feature,layer:'parcels',area};}
+  if(best)return best;const place=prov.placeFeature;return place?{feature:place,layer:'climats'}:null;}
+// The part of the map the user can actually see: on desktop the info panel covers the right; on a phone the info
+// sheet covers the bottom, the search pill the top and the round buttons the right edge.
+function visibleMapRect(){const canvas=$('#terrain-canvas');if(!canvas)return null;const cr=canvas.getBoundingClientRect(),panel=$('.detail-panel'),phone=document.documentElement.classList.contains('phone-ui');
+  let left=cr.left,right=cr.right,top=cr.top,bottom=cr.bottom;
+  if(panel){const pr=panel.getBoundingClientRect();
+    if(!phone&&panel.classList.contains('drawer-open')&&pr.width>0&&pr.left<right&&pr.left>left+cr.width/3)right=pr.left;
+    if(phone&&panel.classList.contains('mobile-open')&&pr.height>0&&pr.top>top+60&&pr.top<bottom)bottom=pr.top;}
+  if(phone){const pill=$('.phone-chrome .top-search')?.getBoundingClientRect();if(pill&&pill.bottom>top&&pill.bottom<top+cr.height/3)top=pill.bottom+6;const fabs=$('.phone-fabs')?.getBoundingClientRect();if(fabs&&fabs.width>0&&fabs.left>left+cr.width/2)right=Math.min(right,fabs.left-4);}
+  return {cr,left,right,top,bottom,width:Math.max(1,right-left),height:Math.max(1,bottom-top)};}
+// Moves the camera so the point at the centre of the screen appears at the centre of the visible map instead.
+function centreInVisible(){const vr=visibleMapRect();if(!renderer||!vr)return;const {cr}=vr,dx=(cr.left+cr.right)/2-(vr.left+vr.right)/2,dy=(cr.top+cr.bottom)/2-(vr.top+vr.bottom)/2;if(Math.abs(dx)<20&&Math.abs(dy)<20)return;
+  const v=renderer.captureView();if(!v||!Number.isFinite(v.radiusMetres))return;const d=v.direction||[.7,.62,.7],len=Math.hypot(d[0],d[2])||1,mpp=2*v.radiusMetres*Math.tan(21*Math.PI/180)/Math.max(1,cr.height),sinEl=Math.max(.25,Math.min(1,d[1]));
+  /* screen-right and towards-the-camera on the ground, as metres east/north (world z points south) */const right=[d[2]/len,d[0]/len],toward=[d[0]/len,-d[2]/len];
+  const sx=dx*mpp,sy=dy*mpp/sinEl;if(renderer.restoreView({...v,easting:v.easting+right[0]*sx+toward[0]*sy,northing:v.northing+right[1]*sx+toward[1]*sy}))renderer.scheduleViewChange?.();}
+// The best view of a cru: a three-quarter view up its slope. The camera stands 25° round from straight downhill (so
+// the slope is seen at an angle and its relief reads, not flattened head-on), 35° above the horizon, at the distance
+// that fits the cru in the visible map. Nearly flat ground keeps the current heading.
+const BEST_VIEW={offsetDeg:25,elevationDeg:35,fill:1.35};
+function bestViewFor(feature,terroir){const rings=outlineRings(feature);if(!rings.length||!renderer)return null;const b=ringsBounds(rings),v=renderer.captureView();if(!v)return null;
+  const span=Math.max(b[2]-b[0],b[3]-b[1],120),vr=visibleMapRect(),shrink=vr?Math.max(1,vr.cr.height/Math.min(vr.width,vr.height*1.3)):1,radius=Math.max(350,Math.min(9000,span/(2*Math.tan(21*Math.PI/180))*BEST_VIEW.fill*shrink));
+  const el=BEST_VIEW.elevationDeg*Math.PI/180,up=Math.sin(el),flat=Math.cos(el);let az;
+  if(terroir&&Number.isFinite(terroir.aspectDeg)&&terroir.slopePct>=2)az=(terroir.aspectDeg+BEST_VIEW.offsetDeg)*Math.PI/180;else{const d=v.direction||[.7,.62,.7];az=Math.atan2(d[0],-d[2]);}
+  return {...v,easting:(b[0]+b[2])/2,northing:(b[1]+b[3])/2,radiusMetres:radius,direction:[Math.sin(az)*flat,up,-Math.cos(az)*flat]};/* world x = east, z = south */}
+async function showBestView(feature,layer,terroir){const t=terroir||await terroirFacts(feature,layer).catch(()=>null);if(document.documentElement.classList.contains('phone-ui'))await new Promise(r=>setTimeout(r,320));/* let the sheet settle */const view=bestViewFor(feature,t);if(!view)return;if(renderer.restoreView(view))renderer.scheduleViewChange?.();centreInVisible();}
+// The comparison panel is wide: a cru already on screen is moved to the middle of the part of the map left visible.
+function centreFeatureInVisible(feature,terroir){const rings=outlineRings(feature);if(!rings.length||!renderer)return;const b=ringsBounds(rings),v=renderer.captureView();if(!v)return;
+  if(renderer.restoreView({...v,easting:(b[0]+b[2])/2,northing:(b[1]+b[3])/2,direction:slopeFacing(v.direction,terroir)}))renderer.scheduleViewChange?.();centreInVisible();}
+// The camera stands downhill of a cru and looks up its slope (aspect = the downhill direction), keeping its tilt.
+// Nearly flat ground keeps the current heading.
+function slopeFacing(dir,terroir){if(!terroir||!Number.isFinite(terroir.aspectDeg)||!(terroir.slopePct>=2))return dir;const d=dir||[.7,.62,.7],up=Math.max(.35,Math.min(.85,d[1])),flat=Math.sqrt(1-up*up),a=terroir.aspectDeg*Math.PI/180;
+  return [Math.sin(a)*flat,up,-Math.cos(a)*flat];/* world x = east, z = south */}
+// Sun & rain is hidden while comparing (its bar would sit under the panel); an open simulation is closed first.
+function closeSunAndRain(){const bar=document.querySelector('.sim-bar');if(bar&&!bar.hidden)bar.querySelector('.sim-close')?.click();}
+async function flyToSide(side){if(!side?.feature||!compare)return;compare.viewing=side===compare.b?'b':'a';compare.flying=true;try{const v=index.villages.find(x=>x.id===side.villageId);if(v&&selected?.id!==v.id&&!renderer?.featureIndex?.some(it=>it.key===side.layer&&String(fprops(it.feature).id)===String(side.id)))await selectVillage(v);await renderer?.whenSceneReady?.();const item=await waitForFeature(side.layer,side.id,8000);if(item){renderer.selectFeature(item.feature,side.layer);await showBestView(item.feature,side.layer,side.terroir);}}finally{if(compare){compare.flying=false;renderCompare();openInfoPanel(side.feature);}}}
+function addCompareButton(host,feature,layer,provenance){if(!host||compare||(layer!=='climats'&&layer!=='parcels')||host.querySelector('.compare-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn compare-btn';b.title='Compare this with another lieu-dit or cru';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M16 4v16M4 8h4M16 16h4"/></svg><span class="share-label">Compare</span>';b.addEventListener('click',e=>{e.stopPropagation();startCompare(feature,layer,provenance);});(host.querySelector('.fact-heading')||host).append(b);}
+const haText=m2=>m2==null||!Number.isFinite(Number(m2))?'—':`${(Number(m2)/10000).toLocaleString('en',{maximumFractionDigits:Number(m2)>=100000?1:2})} ha`;
+function compareRow(label,a,b){return `<div class="cmp-row"><span class="cmp-k">${label}</span><div class="cmp-v cmp-va">${a}</div><div class="cmp-v cmp-vb">${b}</div></div>`;}
+function cmpBar(v,max,k){return Number.isFinite(v)&&max>0?`<i class="cmp-bar"><b class="cmp-fill-${k}" style="width:${Math.max(4,Math.round(v/max*100))}%"></b></i>`:'';}
+function geoCell(side){const L=geologyLegendData;if(!side.geo?.length||!L)return '<span class="cmp-s">Not mapped</span>';const tot=side.geo.reduce((a,[,p])=>a+p,0)||1;return `<i class="cmp-geo">${side.geo.map(([u,pc])=>`<b style="flex:${pc/tot};background:${esc(L.units[u].colour)}"></b>`).join('')}</i><span class="cmp-s">${side.geo.map(([u,pc])=>`${esc(geologyName(L.units[u]).split(',')[0])} ${pc}%`).join(' · ')}</span>`;}
+function ownersCell(side,other,k){const o=side.owners;if(o===undefined)return '<span class="cmp-s">Loading owners…</span>';if(!o)return '<span class="cmp-s">Owner data unavailable</span>';if(!o.entities.length)return '<span class="cmp-s">No legal-entity owner recorded</span>';
+  const otherIds=new Set((other?.owners?.entities||[]).map(e=>e.o.siren||e.o.name)),open=compare.expanded[k],shown=open?o.entities:o.entities.slice(0,4);
+  return `<span class="cmp-s">${o.entities.length} ${o.entities.length===1?'entity':'entities'} · ${haText(o.total)}${side.area?` of ${haText(side.area)}`:''}</span><ul class="cmp-owners">${shown.map(e=>`<li><span>${esc(displayEntityName(e.o.name))}${otherIds.has(e.o.siren||e.o.name)?'<em class="cmp-both">both</em>':''}</span><span>${haText(e.area)}</span></li>`).join('')}</ul>${o.entities.length>4?`<button type="button" class="cmp-more" data-k="${k}">${open?'Show fewer':`+ ${o.entities.length-4} more`}</button>`:''}`;}
+function renderCompare(){const card=$('#feature-card');if(!card||!compare)return;card.classList.add('feature-summary','is-compare');$('.detail-panel')?.classList.add('is-compare');const A=compare.a,B=compare.b;
+  const picker=k=>`<label class="cmp-chip cmp-chip-${k} is-empty"><b>${k.toUpperCase()}</b><input class="cmp-b-input" type="search" placeholder="${k==='b'&&!B?'Search a cru, or click the map':'Search a cru, or click the map'}" autocomplete="off" aria-label="Search a cru for ${k.toUpperCase()}, or click a lieu-dit on the map"></label>`;
+  const chip=(s,k)=>compare.repick===k||(k==='b'&&!s)?picker(k):`<button type="button" class="cmp-chip cmp-chip-${k}" data-fly="${k}" title="Click: show ${esc(s.name)} on the map. Double-click: change it"><b>${k.toUpperCase()}</b><span>${esc(s.name)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/></svg><i class="cmp-x" data-clear="${k}" role="button" tabindex="0" aria-label="Remove ${esc(s.name)} and pick another" title="Remove and pick another">×</i></button>`;
+  const ready=B&&!B.loading&&!A.loading,far=compareFar();
+  const actions=ready?`<div class="cmp-actions"><button type="button" class="cmp-act cmp-both-btn" title="${far?'Too far apart to frame together: go to the other cru':'Show A and B together on the 3D map'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/></svg>${far?`Show ${compare.viewing==='b'?'A':'B'}`:'Show both'}</button><button type="button" class="cmp-act cmp-swap" title="Swap A and B"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Swap</button><span class="cmp-act-gap"></span></div>`:'';
+  let html=`<header class="cmp-head"><div class="cmp-title"><h3>Compare</h3><button type="button" class="cmp-close">Done</button></div><div class="cmp-chips">${chip(A,'a')}${chip(B,'b')}</div>${!B||compare.repick?'<ul class="cmp-results" role="listbox" hidden></ul>':''}${actions}</header>`;
+  if((B&&B.loading)||A.loading){html+='<p class="cmp-s cmp-loading">Loading…</p>';}
+  else if(B){const ta=A.terroir,tb=B.terroir,maxA=Math.max(A.area||0,B.area||0),maxS=Math.max(ta?.sunHours||0,tb?.sunHours||0);
+    const elev=t=>t?`<strong>${Math.round(t.elevation.min)}–${Math.round(t.elevation.max)} m</strong><span class="cmp-s">average ${Math.round(t.elevation.mean)} m</span>`:'<span class="cmp-s">—</span>';
+    const slope=t=>t?`<strong>${t.slopePct.toLocaleString('en',{maximumFractionDigits:1})}%</strong><span class="cmp-s">steepest ${Math.round(t.slopeMaxPct)}%</span>`:'<span class="cmp-s">—</span>';
+    const faces=t=>t?`<strong class="cmp-face">${compassIcon(t.aspectDeg)}${esc(ASPECT_WORDS[t.aspect]||t.aspect)}</strong><span class="cmp-s">${t.aspectDeg}°</span>`:'<span class="cmp-s">—</span>';
+    const sun=(t,k)=>t?`<strong>${t.sunHours.toLocaleString('en')} h</strong>${cmpBar(t.sunHours,maxS,k)}`:'<span class="cmp-s">—</span>';
+    html+=compare.shapes?.key===compareKey()?compare.shapes.html:compareShapes(A,B);
+    html+=`<div class="cmp-grid">${compareRow('',`<span class="cmp-s">${esc(A.tier||'')}${A.village?` · ${esc(A.village)}`:''}</span>`,`<span class="cmp-s">${esc(B.tier||'')}${B.village?` · ${esc(B.village)}`:''}</span>`)}
+      ${compareRow('Area',`<strong>${haText(A.area)}</strong>${cmpBar(A.area,maxA,'a')}`,`<strong>${haText(B.area)}</strong>${cmpBar(B.area,maxA,'b')}`)}
+      ${compareRow('Elevation',elev(ta),elev(tb))}${compareRow('Slope',slope(ta),slope(tb))}${compareRow('Faces',faces(ta),faces(tb))}
+      ${compareRow('Direct sun<br><small>Apr–Sep</small>',sun(ta,'a'),sun(tb,'b'))}${compareRow('Geology',geoCell(A),geoCell(B))}
+      ${compareRow('Owners<br><small>legal entities</small>',ownersCell(A,B,'a'),ownersCell(B,A,'b'))}</div>`;}
+  card.innerHTML=html;
+  card.querySelectorAll('[data-fly]').forEach(b=>{let t=0;b.addEventListener('click',()=>{clearTimeout(t);t=setTimeout(()=>flyToSide(compare[b.dataset.fly]),260);});b.addEventListener('dblclick',e=>{e.preventDefault();clearTimeout(t);compare.repick=b.dataset.fly;renderCompare();});
+    const x=b.querySelector('.cmp-x');if(x){const clear=e=>{e.preventDefault();e.stopPropagation();clearTimeout(t);compare.repick=x.dataset.clear;renderCompare();};x.addEventListener('click',clear);x.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')clear(e);});}});
+  card.querySelector('.cmp-close')?.addEventListener('click',()=>endCompare(true));
+  card.querySelector('.cmp-both-btn')?.addEventListener('click',()=>showBoth());
+  card.querySelector('.cmp-swap')?.addEventListener('click',()=>{[compare.a,compare.b]=[compare.b,compare.a];compare.expanded={};renderCompare();scheduleShareSync();});
+  card.querySelectorAll('.cmp-more').forEach(b=>b.addEventListener('click',()=>{compare.expanded[b.dataset.k]=!compare.expanded[b.dataset.k];renderCompare();}));
+  setupComparePicker(card);
+  if(B&&!B.loading&&compare.shapes?.key!==compareKey())buildCompareMaps();
+  const row=card.querySelector('.cmp-actions');if(row){addShareButton(row);addCompareSaveButton(row);row.querySelectorAll('.share-link-btn').forEach(b=>b.classList.add('cmp-act'));}}
+// B's own picker: type to search every grand and premier cru in the region (not limited by the region filter), or
+// click a lieu-dit or AOC area on the map. Only the result list redraws while typing, so the field keeps focus.
+function setupComparePicker(card){const input=card.querySelector('.cmp-b-input'),list=card.querySelector('.cmp-results');if(!input||!list)return;let hits=[];
+  const draw=async()=>{const q=fold(input.value).replace(/[^a-z0-9]+/g,'');if(q.length<2){list.hidden=true;list.innerHTML='';hits=[];return;}await loadCruIndex();
+    const seen=new Map();for(const c of cruIndex||[]){if(!c.key.includes(q)||String(c.id)===String(compare?.a?.id)||String(c.id)===String(compare?.b?.id))continue;const k=`${c.layer||'parcels'}:${c.id}`;const g=seen.get(k);if(g){g.villages.push(c.village);continue;}seen.set(k,{...c,villages:[c.village]});}
+    hits=[...seen.values()].sort((a,b)=>(b.start.startsWith(q)-a.start.startsWith(q))||((b.class==='grand-cru')-(a.class==='grand-cru'))||a.name.localeCompare(b.name,'fr')).slice(0,8);
+    list.innerHTML=hits.length?hits.map((c,i)=>`<li><button type="button" role="option" data-i="${i}"><strong>${esc(c.name)}</strong><small>${c.class==='grand-cru'?'Grand Cru':c.class==='premier-cru'?'Premier Cru':''}${c.class?' · ':''}${esc(c.villages.map(v=>index.villages.find(x=>x.id===v)?.name||v).join(' / '))}</small></button></li>`).join(''):'<li class="cmp-none">No cru with that name. You can also click a lieu-dit on the map.</li>';list.hidden=false;
+    list.querySelectorAll('button[data-i]').forEach(b=>b.addEventListener('click',()=>setCompareFromCru(hits[Number(b.dataset.i)])));};
+  input.addEventListener('input',draw);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&hits[0]){e.preventDefault();setCompareFromCru(hits[0]);}else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(compare?.repick){compare.repick=null;renderCompare();return;}input.value='';draw();}});/* Esc cancels the pick only, it does not close the panel */
+  if(compare?.repick||!document.documentElement.classList.contains('phone-ui'))setTimeout(()=>input.focus({preventScroll:true}),50);}
+// A and B drawn side by side at one scale, from their own outlines (EPSG:2154 metres), so size and shape compare at a
+// glance even when the crus are far apart. North is up in both; the arrow points downhill (the aspect).
+function outlineRings(feature){const out=[],visit=v=>{if(!Array.isArray(v)||!v.length)return;if(typeof v[0]?.[0]==='number'){if(v.length>2)out.push(v);return;}v.forEach(visit);};visit(fprops(feature).rings||feature?.rings||feature?.geometry?.coordinates);return out;}
+function niceLength(m){const steps=[50,100,200,250,500,1000,2000,5000];return steps.reduce((best,x)=>Math.abs(x-m)<Math.abs(best-m)?x:best,steps[0]);}
+function compareShapes(A,B){const sides=[[A,'a'],[B,'b']].map(([side,k])=>{const rings=outlineRings(side.feature);if(!rings.length)return null;let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const r of rings)for(const [x,y] of r){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}return {side,k,rings,x0,y0,x1,y1,w:x1-x0,h:y1-y0};});
+  if(sides.some(v=>!v))return '';
+  const W=240,H=150,PAD=18,scale=Math.min(...sides.map(v=>Math.min((W-PAD*2)/Math.max(v.w,1),(H-PAD*2-14)/Math.max(v.h,1))));
+  const bar=niceLength((W*.32)/scale),barPx=bar*scale;
+  const panel=v=>{const ox=(W-v.w*scale)/2-v.x0*scale,oy=(H-14+v.h*scale)/2+v.y0*scale;const d=v.rings.map(r=>r.map(([x,y],i)=>`${i?'L':'M'}${(ox+x*scale).toFixed(1)} ${(oy-y*scale).toFixed(1)}`).join('')+'Z').join('');
+    const t=v.side.terroir,cx=W/2,cy=(H-14)/2;let arrow='';
+    if(t&&Number.isFinite(t.aspectDeg)&&t.slopePct>=2){const a=t.aspectDeg*Math.PI/180,len=Math.min(34,Math.max(18,Math.min(v.w,v.h)*scale*.35)),dx=Math.sin(a)*len,dy=-Math.cos(a)*len,hx=cx+dx/2,hy=cy+dy/2,tx=cx-dx/2,ty=cy-dy/2,ang=Math.atan2(dy,dx),hl=7;
+      arrow=`<path class="cmp-shape-arrow" d="M${tx.toFixed(1)} ${ty.toFixed(1)}L${hx.toFixed(1)} ${hy.toFixed(1)}M${hx.toFixed(1)} ${hy.toFixed(1)}L${(hx-hl*Math.cos(ang-.5)).toFixed(1)} ${(hy-hl*Math.sin(ang-.5)).toFixed(1)}M${hx.toFixed(1)} ${hy.toFixed(1)}L${(hx-hl*Math.cos(ang+.5)).toFixed(1)} ${(hy-hl*Math.sin(ang+.5)).toFixed(1)}"/>`;}
+    return `<svg class="cmp-shape cmp-shape-${v.k}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(v.side.name)} outline, ${haText(v.side.area)}"><path class="cmp-shape-fill" d="${d}" fill-rule="evenodd"/>${arrow}<g class="cmp-shape-north" transform="translate(${W-14} 16)"><path d="M0 7V-6M0-8l-3.5 5M0-8l3.5 5"/><text y="17" text-anchor="middle">N</text></g><g class="cmp-shape-scale" transform="translate(10 ${H-9})"><path d="M0 0H${barPx.toFixed(1)}M0-3V3M${barPx.toFixed(1)}-3V3"/><text x="${(barPx+6).toFixed(1)}" y="3.5">${bar>=1000?`${bar/1000} km`:`${bar} m`}</text></g></svg>`;};
+  return `<div class="cmp-shapes">${sides.map(panel).join('')}<p class="cmp-shapes-note">Same scale, north up. The arrow points downhill.</p></div>`;}
+// The detailed version of the two outlines: each box is a small map at the shared scale with the surrounding AOC areas
+// (tinted by class) and lieux-dits, 10 m contours from the village terrain (labelled every 50 m), the cadastral parcel
+// lines inside the cru, a few neighbouring cru names, north, a scale bar and the downhill arrow. Built once per pair.
+// 5 m terrain tiles for grand and premier crus (scripts/build_cru_terrain.py); other places use the village terrain.
+let cruTerrainIndex=null;const cruTerrainCache=new Map();
+function cruTerrain(id){cruTerrainIndex||=fetchJson(dataUrl('./data/cruterrain/index.json')).catch(()=>({}));
+  if(!cruTerrainCache.has(id))cruTerrainCache.set(id,cruTerrainIndex.then(async ix=>{const t=ix?.[id];if(!t)return null;const res=await fetch(dataUrl(`./data/cruterrain/${encodeURIComponent(id)}.png`));if(!res.ok)return null;
+    const bmp=await createImageBitmap(await res.blob(),{premultiplyAlpha:'none',colorSpaceConversion:'none'});const c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(bmp,0,0);const px=g.getImageData(0,0,c.width,c.height).data;
+    const [x0,y1,cell,w,h,lo]=t,z=new Float32Array(w*h);for(let k=0;k<w*h;k++)z[k]=lo+(px[k*4]*256+px[k*4+1])/10;
+    return {x0,y1,cell,w,h,z,at(x,y){const fx=(x-x0)/cell-.5,fy=(y1-y)/cell-.5;if(fx<0||fy<0||fx>w-1||fy>h-1)return null;const i=Math.floor(fx),j=Math.floor(fy),i1=Math.min(w-1,i+1),j1=Math.min(h-1,j+1),tx=fx-i,ty=fy-j;return (z[j*w+i]*(1-tx)+z[j*w+i1]*tx)*(1-ty)+(z[j1*w+i]*(1-tx)+z[j1*w+i1]*tx)*ty;},edge(x,y){const fx=(x-x0)/cell,fy=(y1-y)/cell;return Math.max(0,Math.min(1,Math.min(fx,fy,w-fx,h-fy)/12));}};}).catch(()=>null));
+  return cruTerrainCache.get(id);}
+const compareKey=()=>compare?.a&&compare?.b?`${compare.a.layer}:${compare.a.id}|${compare.b.layer}:${compare.b.id}`:'';
+let cmpManifestPromise=null;const cadastreManifest=()=>cmpManifestPromise||=fetchJson(dataUrl('./data/cadastre/manifest.json')).catch(()=>null);
+const cadastreGeomCache=new Map();
+function cadastreGeometry(code){if(!cadastreGeomCache.has(code))cadastreGeomCache.set(code,fetchScene(dataUrl(`./data/cadastre/${code}.json.gz`)).then(c=>(c?.parcels||c?.features||[]).map(f=>{const q=fprops(f);return {rings:outlineRings(f),b:q.bounds};})).catch(()=>[]));return cadastreGeomCache.get(code);}
+function ringsBounds(rings){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const r of rings)for(const [x,y] of r){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}return [x0,y0,x1,y1];}
+const NAV_CLASS={'grand-cru':'#e3b23c','premier-cru':'#5f97d6'};
+function sideCommunes(side){const p=fprops(side.feature),codes=new Set();const add=c=>{if(/^\d{5}$/.test(String(c||'')))codes.add(String(c));};add(p.insee);add(p.communeCode);if(side.layer==='climats')add(String(p.id||'').split(':')[0]);let list=p.featureCommuneCodes;if(typeof list==='string'){try{list=JSON.parse(list.replace(/'/g,'"'));}catch{list=[];}}(Array.isArray(list)?list:[]).forEach(add);if(side.layer==='parcels')for(const c of cruIndex||[])if(String(c.id)===String(side.id))add(String(c.village).split('-').pop());/* a cru spanning communes gets every commune's parcels */
+  if(!codes.size)add(String(side.villageId||'').split('-').pop());return [...codes];}
+function contourPaths(sample,nx,ny,toX,toY){const g=[];let lo=Infinity,hi=-Infinity;for(let j=0;j<=ny;j++){const row=[];for(let i=0;i<=nx;i++){const z=sample(i,j);row.push(z);if(z!=null){if(z<lo)lo=z;if(z>hi)hi=z;}}g.push(row);}
+  if(!(hi>lo))return {minor:'',major:'',labels:[]};const step=hi-lo<25?5:10,minor=[],major=[],labels=new Map();
+  for(let level=Math.ceil(lo/step)*step;level<=hi;level+=step){const isMajor=level%50===0,out=isMajor?major:minor;
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const a=g[j][i],b=g[j][i+1],c=g[j+1][i+1],d=g[j+1][i];if(a==null||b==null||c==null||d==null)continue;
+      const pts=[];const edge=(z1,z2,x1,y1,x2,y2)=>{if((z1<level)!==(z2<level)){const t=(level-z1)/(z2-z1);pts.push([x1+(x2-x1)*t,y1+(y2-y1)*t]);}};
+      edge(a,b,i,j,i+1,j);edge(b,c,i+1,j,i+1,j+1);edge(c,d,i+1,j+1,i,j+1);edge(d,a,i,j+1,i,j);
+      for(let k=0;k+1<pts.length;k+=2){const [p,q]=[pts[k],pts[k+1]];out.push(`M${toX(p[0]).toFixed(1)} ${toY(p[1]).toFixed(1)}L${toX(q[0]).toFixed(1)} ${toY(q[1]).toFixed(1)}`);
+        if(isMajor){const mx=toX((p[0]+q[0])/2),my=toY((p[1]+q[1])/2);if(my>14&&my<toY(ny)-26&&mx>14&&mx<toX(nx)-34){const cur=labels.get(level),score=Math.abs(mx-toX(nx*.82));if(!cur||score<cur.score)labels.set(level,{x:mx,y:my,score,level});}}}}}
+  return {minor:minor.join(''),major:major.join(''),labels:[...labels.values()]};}
+async function buildCompareMaps(){const key=compareKey();if(!key||compare.building===key)return;compare.building=key;
+  try{await loadCruIndex();const cru=new Map((cruIndex||[]).map(c=>[String(c.id),c]));
+    const sides=await Promise.all([compare.a,compare.b].map(async(side,n)=>{
+      const vids=new Set([side.villageId]);if(side.layer==='parcels')for(const c of cruIndex||[])if(String(c.id)===String(side.id))vids.add(c.village);/* an AOC area split between communes is stored once per village: join the pieces */
+      const scenes=(await Promise.all([...vids].map(id=>{const v=index.villages.find(x=>x.id===id);return v?loadScene(v).catch(()=>null):null;}))).filter(Boolean);
+      const rings=side.layer==='parcels'&&scenes.length?scenes.flatMap(sc=>(sc.parcels||[]).filter(f=>String(fprops(f).id)===String(side.id)).flatMap(outlineRings)):outlineRings(side.feature);
+      const b0=ringsBounds(rings),codes=new Set(sideCommunes(side));for(const [code,m] of Object.entries((await cadastreManifest())?.communes||{})){const cb=m.bounds;if(cb&&cb[2]>=b0[0]&&cb[0]<=b0[2]&&cb[3]>=b0[1]&&cb[1]<=b0[3])codes.add(code);}/* every commune the cru overlaps */
+      const parcels=(await Promise.all([...codes].map(cadastreGeometry))).flat();
+      let fineId=side.layer==='parcels'?String(side.id):null;
+      if(!fineId){const ix=await (cruTerrainIndex||=fetchJson(dataUrl('./data/cruterrain/index.json')).catch(()=>({})));let best=null;for(const [id,[tx0,ty1,cell,w,h]] of Object.entries(ix||{})){if(tx0<=b0[0]&&ty1>=b0[3]&&tx0+cell*w>=b0[2]&&ty1-cell*h<=b0[1]&&(!best||cell<best.cell||(cell===best.cell&&w*h<best.n)))best={id,cell,n:w*h};}fineId=best?.id||null;}/* a lieu-dit borrows the tile of a cru that covers it */
+      const fine=fineId?await cruTerrain(fineId):null;
+      return {side,k:n?'b':'a',scenes,rings,b:b0,parcels,fine};}));
+    if(compareKey()!==key)return;
+    compare.geom=sides.map(v=>({rings:v.rings,b:v.b}));
+    const figures=renderCompareMaps(sides,cru);
+    const html=`<div class="cmp-shapes">${figures.join('')}<p class="cmp-shapes-note">Same scale, north up · lines: parcels · arrow: downhill</p></div>`;
+    compare.shapes={key,html};if(!compare.repick)renderCompare();else{const host=$('#feature-card .cmp-shapes');if(host)host.outerHTML=html;}
+  }catch(e){debug.resourceErrors.push(`compare map: ${e.message}`);}finally{if(compare&&compare.building===key)compare.building=null;}}
+// Each cru on a small north-up map at one shared scale: surrounding AOC areas tinted by class with a few names, the
+// lieux-dits, contours from the terrain (5 m tiles around grand and premier crus, the village terrain elsewhere), the
+// cadastral parcels inside the cru, a scale bar and the downhill arrow. Flat on purpose: a 3D angle foreshortens shape
+// and area, which a side-by-side comparison has to show truthfully; the real 3D is one click away ("Show both").
+function renderCompareMaps(sides,cru){
+  const W=260,H=200,PAD=24,scale=Math.min(...sides.map(v=>Math.min((W-PAD*2)/Math.max(v.b[2]-v.b[0],1),(H-PAD*2-12)/Math.max(v.b[3]-v.b[1],1))));
+  const bar=niceLength((W*.3)/scale),barPx=bar*scale,NX=88,NY=68;
+  return sides.map(v=>{
+    const cx=(v.b[0]+v.b[2])/2,cy=(v.b[1]+v.b[3])/2,vx0=cx-W/2/scale,vx1=cx+W/2/scale,vy1=cy+(H-12)/2/scale,vy0=cy-(H+12)/2/scale;
+    const X=x=>(x-vx0)*scale,Y=y=>(vy1-y)*scale,path=rings=>rings.map(r=>r.map(([x,y],k)=>`${k?'L':'M'}${X(x).toFixed(1)} ${Y(y).toFixed(1)}`).join('')+'Z').join('');
+    const inView=b=>b&&b[2]>=vx0&&b[0]<=vx1&&b[3]>=vy0&&b[1]<=vy1;
+    const coarseAt=(x,y)=>{for(const sc of v.scenes){const h=sampleScene(sc,x,y);if(h!=null)return h;}return null;};
+    const heightAt=(x,y)=>{const f=v.fine?.at(x,y);if(f!=null){const k=v.fine.edge(x,y);if(k>=1)return f;const c=coarseAt(x,y);return c==null?f:c+(f-c)*k;}return coarseAt(x,y);};
+    const own=String(v.side.id),seen=new Set(),aoc=[],lieux=[],names=[];
+    for(const f of v.scenes.flatMap(sc=>sc.parcels||[])){const q=fprops(f);if(seen.has(`p:${q.id}`))continue;seen.add(`p:${q.id}`);if(String(q.id)===own&&v.side.layer==='parcels')continue;const rings=outlineRings(f),b=ringsBounds(rings);if(!inView(b))continue;const c=cru.get(String(q.id));aoc.push(`<path d="${path(rings)}" fill="${c?NAV_CLASS[c.class]||'#b9a98f':'#c9bda6'}" fill-opacity="${c?.3:.14}" fill-rule="evenodd"/>`);if(c&&(c.class==='grand-cru'||c.class==='premier-cru'))names.push({name:c.name,x:X((b[0]+b[2])/2),y:Y((b[1]+b[3])/2),area:(b[2]-b[0])*(b[3]-b[1])});}
+    for(const f of v.scenes.flatMap(sc=>sc.climats||[])){const q=fprops(f);if(seen.has(`c:${q.id}`))continue;seen.add(`c:${q.id}`);if(String(q.id)===own&&v.side.layer==='climats')continue;const rings=outlineRings(f);if(inView(ringsBounds(rings)))lieux.push(path(rings));}
+    const ct=contourPaths((i,j)=>heightAt(vx0+i/NX*(vx1-vx0),vy1-j/NY*(vy1-vy0)),NX,NY,i=>i/NX*W,j=>j/NY*H);
+    const cuts=v.parcels.filter(q=>q.b&&q.b[2]>=v.b[0]&&q.b[0]<=v.b[2]&&q.b[3]>=v.b[1]&&q.b[1]<=v.b[3]).map(q=>path(q.rings)).join('');
+    const shape=path(v.rings),clip=`cmpclip-${v.k}`,t=v.side.terroir;let arrow='';
+    if(t&&Number.isFinite(t.aspectDeg)&&t.slopePct>=2){const ax=X(cx),ay=Y(cy),a=t.aspectDeg*Math.PI/180,len=Math.min(36,Math.max(18,Math.min(v.b[2]-v.b[0],v.b[3]-v.b[1])*scale*.4)),dx=Math.sin(a)*len,dy=-Math.cos(a)*len,hx=ax+dx/2,hy=ay+dy/2,ang=Math.atan2(dy,dx);arrow=`<path class="cmp-shape-arrow" d="M${(ax-dx/2).toFixed(1)} ${(ay-dy/2).toFixed(1)}L${hx.toFixed(1)} ${hy.toFixed(1)}M${hx.toFixed(1)} ${hy.toFixed(1)}l${(-7*Math.cos(ang-.5)).toFixed(1)} ${(-7*Math.sin(ang-.5)).toFixed(1)}M${hx.toFixed(1)} ${hy.toFixed(1)}l${(-7*Math.cos(ang+.5)).toFixed(1)} ${(-7*Math.sin(ang+.5)).toFixed(1)}"/>`;}
+    const sx0=X(v.b[0])-4,sx1=X(v.b[2])+4,sy0=Y(v.b[3])-4,sy1=Y(v.b[1])+4,same=fold(v.side.name).replace(/[^a-z0-9]+/g,''),placed=[];
+    const labels=names.filter(n=>n.x>16&&n.x<W-16&&n.y>14&&n.y<H-22&&!(n.x>W-80&&n.y<46)&&!(n.x+n.name.length*2.6>sx0&&n.x-n.name.length*2.6<sx1&&n.y+6>sy0&&n.y-6<sy1)&&fold(n.name).replace(/[^a-z0-9]+/g,'')!==same).sort((a,b)=>b.area-a.area).filter(n=>{if(placed.some(p=>Math.abs(p.x-n.x)<70&&Math.abs(p.y-n.y)<14))return false;placed.push(n);return placed.length<=4;});
+    return `<svg class="cmp-shape cmp-shape-${v.k}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(v.side.name)} on a small map at the shared scale"><defs><clipPath id="${clip}"><path d="${shape}" clip-rule="evenodd"/></clipPath></defs>
+      <g class="cmp-map-aoc">${aoc.join('')}</g><path class="cmp-map-lieux" d="${lieux.join('')}"/>
+      <path class="cmp-map-contour" d="${ct.minor}"/><path class="cmp-map-contour is-major" d="${ct.major}"/>
+      <path class="cmp-shape-fill" d="${shape}" fill-rule="evenodd"/><path class="cmp-map-parcels" d="${cuts}" clip-path="url(#${clip})"/><path class="cmp-shape-line" d="${shape}" fill-rule="evenodd"/>
+      ${ct.labels.map(l=>`<text class="cmp-map-elev" x="${l.x.toFixed(1)}" y="${(l.y-2).toFixed(1)}">${l.level} m</text>`).join('')}
+      ${labels.map(n=>`<text class="cmp-map-name" x="${n.x.toFixed(1)}" y="${n.y.toFixed(1)}" text-anchor="middle">${esc(n.name)}</text>`).join('')}
+      ${arrow}<g class="cmp-shape-north" transform="translate(${W-14} 16)"><path d="M0 7V-6M0-8l-3.5 5M0-8l3.5 5"/><text y="17" text-anchor="middle">N</text></g><g class="cmp-shape-scale" transform="translate(10 ${H-9})"><path d="M0 0H${barPx.toFixed(1)}M0-3V3M${barPx.toFixed(1)}-3V3"/><text x="${(barPx+6).toFixed(1)}" y="3.5">${bar>=1000?`${bar/1000} km`:`${bar} m`}</text></g></svg>`;});}
+// "Show both": both crus outlined on the 3D map in their A and B colours. Near each other, the camera frames the two;
+// far apart, it frames A and says so (the A and B chips fly between them).
+const COMPARE_NEAR_M=3500;
+function compareFar(){const g=compare?.geom;if(!g)return false;const [a,b]=g;return Math.hypot((a.b[0]+a.b[2]-b.b[0]-b.b[2])/2,(a.b[1]+a.b[3]-b.b[1]-b.b[3])/2)>COMPARE_NEAR_M;}
+async function showBoth(){if(!compare?.a||!compare?.b)return;if(!compare.geom){await buildCompareMaps();if(!compare?.geom)return;}
+  const [ga,gb]=compare.geom;renderer?.setCompareOutlines?.([{rings:ga.rings,color:0xb3abff},{rings:gb.rings,color:0x4fe0a6}]);/* lighter A and B tints: they must read on the aerial photo */
+  if(compareFar()){const next=compare.viewing==='b'?'a':'b';await flyToSide(compare[next]);return;}/* too far to frame together: go to the other one */
+  const x0=Math.min(ga.b[0],gb.b[0]),y0=Math.min(ga.b[1],gb.b[1]),x1=Math.max(ga.b[2],gb.b[2]),y1=Math.max(ga.b[3],gb.b[3]),view=renderer?.captureView?.();if(!view)return;
+  if(renderer.restoreView({...view,easting:(x0+x1)/2,northing:(y0+y1)/2,radiusMetres:Math.max(600,Math.min(6000,Math.max(x1-x0,y1-y0)*1.9))}))renderer.scheduleViewChange?.();centreInVisible();}
+function addParcelCompareButton(host,prov){if(!host||compare||host.querySelector('.compare-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn compare-btn';b.title='Compare the cru this parcel lies in with another';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M16 4v16M4 8h4M16 16h4"/></svg><span class="share-label">Compare</span>';
+  b.addEventListener('click',async e=>{e.stopPropagation();await loadCruIndex();const cru=cruUnderParcel(prov);if(cru)startCompare(cru.feature,cru.layer,{});else{const l=b.querySelector('.share-label');l.textContent='No cru here';setTimeout(()=>{l.textContent='Compare';},1800);}});
+  (host.querySelector('.fact-heading')||host).append(b);}
+function addCompareSaveButton(host){if(!host||host.querySelector('.cmp-save-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn cmp-save-btn';b.title='Save this comparison as an image';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg><span class="share-label">Save image</span>';
+  b.addEventListener('click',async e=>{e.stopPropagation();const l=b.querySelector('.share-label');b.disabled=true;l.textContent='Preparing…';try{await saveCompareImage();l.textContent='Saved';}catch(err){l.textContent='Could not save';debug.resourceErrors.push(`compare image: ${err.message}`);}finally{b.disabled=false;setTimeout(()=>{l.textContent='Save image';},1800);}});
+  const share=host.querySelector('.share-link-btn');if(share)share.after(b);else host.append(b);}
+// The comparison as one picture: the two names, the two maps (copied from the panel with their styles inlined) and the
+// figures, with the sources and the site underneath. Phones get the share sheet when it accepts files.
+function svgToImage(svg){const clone=svg.cloneNode(true),src=[svg,...svg.querySelectorAll('*')],dst=[clone,...clone.querySelectorAll('*')];
+  const keys=['fill','fill-opacity','stroke','stroke-width','stroke-opacity','opacity','font-family','font-size','font-weight','font-style','paint-order','stroke-linejoin','stroke-linecap'];
+  src.forEach((el,i)=>{const cs=getComputedStyle(el);dst[i].setAttribute('style',keys.map(k=>`${k}:${cs.getPropertyValue(k)}`).join(';'));});
+  const box=svg.viewBox.baseVal;clone.setAttribute('width',box.width);clone.setAttribute('height',box.height);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
+  return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);res(img);};img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('map drawing failed'));};img.src=url;});}
+async function saveCompareImage(){if(!compare?.a||!compare?.b)return;const A=compare.a,B=compare.b,S=2,W=1080,M=44,LBL=150,GAP=24,col=(W-M*2-LBL-GAP)/2,x1=M+LBL,x2=x1+col+GAP;
+  const svgs=[...document.querySelectorAll('#feature-card .cmp-shapes svg.cmp-shape')],maps=await Promise.all(svgs.map(svgToImage));
+  const serif='Georgia,"Source Serif 4",serif',sans='system-ui,-apple-system,"Segoe UI",sans-serif',ink='#28231f',muted='#7a7064',line='#e1d8c9',paper='#f4efe5',card='#fffdf7',wine='#7b4051';
+  const COL={a:{fill:'#7f77dd',dark:'#3c3489'},b:{fill:'#1d9e75',dark:'#085041'}},L=geologyLegendData,ta=A.terroir,tb=B.terroir;
+  // measure first: geology and owners can wrap
+  const probe=document.createElement('canvas').getContext('2d');const wrap=(text,font,max)=>{probe.font=font;const words=String(text).split(' '),lines=[];let cur='';for(const w of words){const t=cur?`${cur} ${w}`:w;if(probe.measureText(t).width>max&&cur){lines.push(cur);cur=w;}else cur=t;}if(cur)lines.push(cur);return lines;};
+  const geoText=x=>x.geo?.length&&L?x.geo.map(([u,pc])=>`${geologyName(L.units[u]).split(',')[0]} ${pc}%`).join(' · '):'Not mapped';
+  const geoA=wrap(geoText(A),`13px ${sans}`,col),geoB=wrap(geoText(B),`13px ${sans}`,col);
+  const owners=x=>x.owners?.entities?.length?x.owners.entities.slice(0,5):[],oa=owners(A),ob=owners(B),otherIds=x=>new Set((x.owners?.entities||[]).map(e=>e.o.siren||e.o.name));
+  const mapH=maps.length===2?Math.round(col*(maps[0].height/maps[0].width)):0;
+  const rows=[{k:'Area',h:52},...(ta||tb?[{k:'Elevation',h:56},{k:'Slope',h:56},{k:'Faces',h:56},{k:'Direct sun',sub:'Apr–Sep',h:52}]:[]),{k:'Geology',h:30+Math.max(geoA.length,geoB.length)*18},{k:'Owners',sub:'legal entities',h:40+Math.max(oa.length,ob.length,1)*22}];
+  const top=M+92,chipsH=58,H=top+chipsH+18+(mapH?mapH+34:0)+30+rows.reduce((a,r)=>a+r.h,0)+92;
+  const c=document.createElement('canvas');c.width=W*S;c.height=H*S;const g=c.getContext('2d');g.scale(S,S);g.textBaseline='alphabetic';
+  const rr=(x,y,w,h,r)=>{g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();};
+  const fit=(text,max)=>{let t=String(text);while(g.measureText(t).width>max&&t.length>3)t=`${t.slice(0,-2)}…`;return t;};
+  g.fillStyle=paper;g.fillRect(0,0,W,H);
+  // title
+  g.fillStyle=wine;g.font=`600 11px ${sans}`;g.fillText(`${REGION.title.toUpperCase()}  ·  COMPARE`,M,M+12);
+  g.fillStyle=ink;g.font=`34px ${serif}`;g.fillText(fit(`${A.name} vs ${B.name}`,W-M*2),M,M+56);
+  // chips, as in the panel
+  const chip=(x,side,k)=>{const col0=COL[k];rr(x,top,col,chipsH,12);g.fillStyle=card;g.fill();g.lineWidth=1.6;g.strokeStyle=col0.fill;g.stroke();g.fillStyle=col0.fill;g.beginPath();g.arc(x+26,top+chipsH/2,12,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.font=`700 12px ${sans}`;g.textAlign='center';g.fillText(k.toUpperCase(),x+26,top+chipsH/2+4);g.textAlign='start';g.fillStyle=col0.dark;g.font=`17px ${serif}`;g.fillText(fit(side.name,col-60),x+48,top+25);g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText(fit([side.tier,side.village].filter(Boolean).join(' · '),col-60),x+48,top+44);};
+  chip(x1,A,'a');chip(x2,B,'b');
+  let y=top+chipsH+18;
+  if(mapH){for(const [img,x] of [[maps[0],x1],[maps[1],x2]]){g.save();rr(x,y,col,mapH,12);g.clip();g.drawImage(img,x,y,col,mapH);g.restore();rr(x+.5,y+.5,col-1,mapH-1,12);g.strokeStyle=line;g.lineWidth=1;g.stroke();}y+=mapH+20;g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText('Same scale, north up · lines: parcels · arrow: downhill',x1,y);y+=14;}
+  y+=16;
+  const bar=(x,yy,v,max,k)=>{rr(x,yy,col,6,3);g.fillStyle='#e9e1d3';g.fill();if(Number.isFinite(v)&&max>0){rr(x,yy,Math.max(6,col*v/max),6,3);g.fillStyle=COL[k].fill;g.fill();}};
+  const val=(x,yy,big,small)=>{g.fillStyle=ink;g.font=`20px ${serif}`;g.fillText(fit(big,col),x,yy);if(small){g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText(fit(small,col),x,yy+19);}};
+  const maxArea=Math.max(A.area||0,B.area||0),maxSun=Math.max(ta?.sunHours||0,tb?.sunHours||0);
+  for(const r of rows){g.strokeStyle=line;g.lineWidth=1;g.beginPath();g.moveTo(M,y);g.lineTo(W-M,y);g.stroke();
+    g.fillStyle=muted;g.font=`600 10.5px ${sans}`;g.fillText(r.k.toUpperCase(),M,y+24);if(r.sub){g.font=`11px ${sans}`;g.fillText(r.sub,M,y+40);}
+    const yy=y+26;
+    if(r.k==='Area'){val(x1,yy,haText(A.area));val(x2,yy,haText(B.area));bar(x1,yy+10,A.area,maxArea,'a');bar(x2,yy+10,B.area,maxArea,'b');}
+    else if(r.k==='Elevation'){for(const [t,x] of [[ta,x1],[tb,x2]])val(x,yy,t?`${Math.round(t.elevation.min)}–${Math.round(t.elevation.max)} m`:'—',t?`average ${Math.round(t.elevation.mean)} m`:'');}
+    else if(r.k==='Slope'){for(const [t,x] of [[ta,x1],[tb,x2]])val(x,yy,t?`${t.slopePct.toFixed(1)}%`:'—',t?`steepest ${Math.round(t.slopeMaxPct)}%`:'');}
+    else if(r.k==='Faces'){for(const [t,x] of [[ta,x1],[tb,x2]])val(x,yy,t?(ASPECT_WORDS[t.aspect]||t.aspect):'—',t?`${t.aspectDeg}°`:'');}
+    else if(r.k==='Direct sun'){val(x1,yy,ta?`${ta.sunHours.toLocaleString('en')} h`:'—');val(x2,yy,tb?`${tb.sunHours.toLocaleString('en')} h`:'—');bar(x1,yy+10,ta?.sunHours,maxSun,'a');bar(x2,yy+10,tb?.sunHours,maxSun,'b');}
+    else if(r.k==='Geology'){for(const [side,x,lines] of [[A,x1,geoA],[B,x2,geoB]]){if(side.geo?.length&&L){const tot=side.geo.reduce((a,[,pc])=>a+pc,0)||1;let gx=x;g.save();rr(x,y+14,col,10,5);g.clip();for(const [u,pc] of side.geo){const w=col*pc/tot;g.fillStyle=L.units[u].colour;g.fillRect(gx,y+14,w+.5,10);gx+=w;}g.restore();}g.fillStyle=muted;g.font=`13px ${sans}`;lines.forEach((ln,k)=>g.fillText(ln,x,y+42+k*18));}}
+    else if(r.k==='Owners'){for(const [side,other,x,list] of [[A,B,x1,oa],[B,A,x2,ob]]){const o=side.owners,ids=otherIds(other);g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText(o?.entities?.length?`${o.entities.length} entities · ${haText(o.total)}${side.area?` of ${haText(side.area)}`:''}${o.entities.length>5?' · largest 5':''}`:'No legal-entity owner recorded',x,y+24);
+      list.forEach((e,k)=>{const yy2=y+48+k*22,both=ids.has(e.o.siren||e.o.name);g.font=`13px ${sans}`;g.fillStyle=ink;const ha=haText(e.area),haW=g.measureText(ha).width,tagW=both?38:0;g.fillText(fit(displayEntityName(e.o.name),col-haW-tagW-14),x,yy2);if(both){const nw=g.measureText(fit(displayEntityName(e.o.name),col-haW-tagW-14)).width;rr(x+nw+6,yy2-11,32,15,4);g.fillStyle='#f6e3b4';g.fill();g.fillStyle='#6b4a07';g.font=`600 9.5px ${sans}`;g.fillText('both',x+nw+12,yy2);g.font=`13px ${sans}`;}g.fillStyle=muted;g.textAlign='right';g.fillText(ha,x+col,yy2);g.textAlign='start';});
+}}
+    y+=r.h;}
+  g.strokeStyle=line;g.beginPath();g.moveTo(M,y);g.lineTo(W-M,y);g.stroke();
+  g.fillStyle=muted;g.font=`11px ${sans}`;g.fillText('Sources: IGN RGE ALTI · INAO · DGFiP / Etalab · BRGM BD Charm-50 (Licence Ouverte 2.0). Owners: legal entities in the DGFiP register only.',M,y+28);
+  g.fillStyle=wine;g.font=`600 12px ${sans}`;g.fillText('climat.daoyizhang.com',M,y+52);g.textAlign='right';g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText('Created by Daoyi Zhang',W-M,y+52);g.textAlign='start';
+  const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('encode failed')),'image/png')),name=`${escapeFilename(`${A.name}-vs-${B.name}`)}.png`;
+  const file=typeof File==='function'?new File([blob],name,{type:'image/png'}):null;
+  if(document.documentElement.classList.contains('phone-ui')&&file&&navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:`${A.name} vs ${B.name}`});return;}catch(e){if(e?.name==='AbortError')return;}}
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+// ---- Shareable links ----
+// The address records what is on screen: #<village>?sel=<layer>:<feature id>&owner=<SIREN>&shade=<mode>&cam=<easting>,
+// <northing>,<distance m>,<heading°>,<tilt°>. It is rewritten quietly (no history entry) as you move, select or open a
+// card, so the browser's own share button and "Copy link" both give a link that reopens the same view.
+let shareRestoring=false,shareTimer=0;
+function shareState(){const p=new URLSearchParams(),sf=selectedFeature;
+  if(sf?.feature&&['climats','parcels','cadastre'].includes(sf.layer)){const f=sf.feature.properties||sf.feature,id=f.id??f.featureId;if(id!=null)p.set('sel',`${sf.layer}:${id}`);}
+  if(ownerShown)p.set('owner',ownerShown.siren||ownerShown.name);
+  if(compare?.a?.id!=null&&compare?.b?.id!=null&&!compare.a.loading&&!compare.b.loading){p.delete('sel');p.set('cmp',[compare.a,compare.b].map(x=>`${x.layer}:${x.id}@${x.villageId}`).join(','));}
+  if(terroirMode&&terroirMode!=='off')p.set('shade',terroirMode);
+  const v=renderer?.captureView?.();if(v&&Number.isFinite(v.easting)&&Number.isFinite(v.radiusMetres)){const [dx,dy,dz]=v.direction||[.7,.62,.7],deg=180/Math.PI;p.set('cam',[Math.round(v.easting),Math.round(v.northing),Math.round(v.radiusMetres),Math.round((Math.atan2(dx,dz)*deg+360)%360),Math.round(Math.acos(Math.max(-1,Math.min(1,dy)))*deg)].join(','));}
+  return p;}
+function shareHash(id){const q=shareState().toString().replace(/%2C/g,',').replace(/%3A/g,':');return `#${encodeURIComponent(id)}${q?`?${q}`:''}`;}
+function shareUrl(){return `${location.origin}${location.pathname}${shareHash(hashParts().id||selected?.id||'')}`;}
+function scheduleShareSync(){if(shareRestoring||!selected)return;clearTimeout(shareTimer);shareTimer=setTimeout(()=>{if(shareRestoring||!selected)return;const hash=shareHash(hashParts().id||selected.id);if(location.hash!==hash)history.replaceState(null,'',hash);},450);}
+function waitForFeature(layer,id,ms=12000){const t0=performance.now();return new Promise(res=>{const look=()=>{const item=renderer?.featureIndex?.find(it=>it.key===layer&&String((it.feature?.properties||it.feature)?.id)===String(id));if(item||performance.now()-t0>ms)return res(item||null);setTimeout(look,300);};look();});}
+async function applyShare(params){if(!params||![...params.keys()].length){shareRestoring=false;return;}shareRestoring=true;
+  try{await renderer?.whenSceneReady?.();
+    const shade=params.get('shade');if(shade&&shade!==terroirMode)await setTerroirMode(shade);
+    const cam=(params.get('cam')||'').split(',').map(Number),hasCam=cam.length>=3&&cam.slice(0,3).every(Number.isFinite);
+    if(hasCam){const r=Math.PI/180,az=(Number.isFinite(cam[3])?cam[3]:45)*r,tilt=(Number.isFinite(cam[4])?cam[4]:50)*r;renderer.restoreView({easting:cam[0],northing:cam[1],radiusMetres:cam[2],direction:[Math.sin(tilt)*Math.sin(az),Math.cos(tilt),Math.sin(tilt)*Math.cos(az)]});renderer.requestRender?.();}
+    const sel=params.get('sel'),cut=sel?sel.indexOf(':'):-1;
+    if(cut>0){const layer=sel.slice(0,cut),id=sel.slice(cut+1),item=await waitForFeature(layer,id);
+      if(item){if(!hasCam)renderer.focusFeature(item.feature);let prov={};if(layer==='cadastre'){const ring=item.ring||[],c=[ring.reduce((a,q)=>a+q[0],0)/(ring.length||1),ring.reduce((a,q)=>a+q[1],0)/(ring.length||1)];prov={placeName:renderer.placeAt?.(c),placeFeature:renderer.placeFeatureAt?.(c),parcelRing:ring,parcelHoles:item.holes||[],placeScope:'selected-map-point',aocUnder:renderer.aocUnder?.(item.feature)};}renderer.selectFeature(item.feature,layer,prov);}}
+    const cmp=params.get('cmp');if(cmp)await restoreCompare(cmp);
+    const owner=params.get('owner');
+    if(owner){const list=await loadOwners(),o=(list||[]).find(x=>x.siren===owner)||(list||[]).find(x=>x.name===owner);
+      if(o){const input=ownerSearchInput();if(document.documentElement.classList.contains('phone-ui'))window.atlasPhoneUI?.setMode?.('owner');if(input)input.value=o.name;showOwner(o);window.atlasSearchDrop?.open(input);}}
+  }finally{shareRestoring=false;scheduleShareSync();}}
+async function copyShareLink(btn){const url=shareUrl(),label=btn?.querySelector('.share-label');
+  const done=text=>{if(!label)return;const was=label.dataset.idle||label.textContent;label.dataset.idle=was;label.textContent=text;clearTimeout(btn._t);btn._t=setTimeout(()=>{label.textContent=was;},1800);};
+  if(document.documentElement.classList.contains('phone-ui')&&navigator.share){try{await navigator.share({title:document.title,url});return;}catch(e){if(e?.name==='AbortError')return;}}
+  try{await navigator.clipboard.writeText(url);done('Link copied');}catch{window.prompt('Copy this link',url);}}
+const LINK_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>';
+function addShareButton(host){if(!host||host.querySelector('.share-link-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn';b.title='Copy a link that opens this view';b.innerHTML=`${LINK_ICON}<span class="share-label">Share</span>`;b.addEventListener('click',e=>{e.stopPropagation();copyShareLink(b);});const head=host.querySelector?.('.fact-heading')||host;head.append(b);}
+function setupShareButtons(){const save=$('#share-button');if(save&&!$('#copy-link-button')){const b=document.createElement('button');b.id='copy-link-button';b.type='button';b.title='Copy a link that opens this view';b.innerHTML=`${LINK_ICON}<span class="button-label share-label">Copy link</span>`;b.addEventListener('click',()=>copyShareLink(b));save.after(b);}}
 async function boot(){try{await applyRegion();[index,,useAvif]=await Promise.all([loadIndex(),loadRegionalData(),avifSupported()]);for(const tile of Object.values(textureManifest))for(const key of ['url','urlAvif'])if(tile?.[key])tile[key]=dataUrl(tile[key]).href;setup()}catch(e){debug.resourceErrors.push(String(e.message));ui.loading.hidden=true;ui.error.hidden=false;ui.errorMsg.textContent=e.message;}}
 boot();
 
