@@ -220,6 +220,9 @@ function setupLayersPopover(){const pop=$('#layer-popover'),btn=$('#layers-toggl
   window.addEventListener('resize',()=>{if(pop.classList.contains('is-open'))place();});}
 // Rotate/Pan, Aerial/Atlas and terrain exaggeration as segmented pills; the AOC fill slider shows its level.
 function setupControlPills(){document.querySelectorAll('.scene-controls .control-group').forEach(g=>{if(g.querySelector('.seg'))return;const buttons=[...g.querySelectorAll(':scope>button')];if(!buttons.length)return;const seg=document.createElement('span');seg.className='seg';seg.append(...buttons);g.append(seg);});
+  const fillLabel=$('.opacity-control');if(fillLabel&&!fillLabel.querySelector('.opacity-word')){const t=[...fillLabel.childNodes].find(n=>n.nodeType===3&&n.textContent.trim());if(t){const w=document.createElement('span');w.className='opacity-word';w.textContent=t.textContent.trim();t.replaceWith(w);}}
+  // phones: keep the shading legend just above the controls sheet, whatever height the sheet wraps to
+  const sheet=$('.viewer-bottom');if(sheet&&window.ResizeObserver&&!sheet.dataset.observed){sheet.dataset.observed='1';new ResizeObserver(()=>document.documentElement.style.setProperty('--controls-sheet-h',`${Math.round(sheet.getBoundingClientRect().height)}px`)).observe(sheet);}
   const range=$('#aoc-opacity');if(range&&!range.dataset.fill){range.dataset.fill='1';const fill=()=>range.style.setProperty('--fill',`${(range.value-range.min)/(range.max-range.min)*100}%`);range.addEventListener('input',fill);fill();}}
 function setupTerroirControl(){
   const bar=$('#layers-toggle');if(!bar||$('#terroir-toggle'))return;

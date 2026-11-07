@@ -1172,3 +1172,10 @@ html{touch-action:manipulation}
 .layer-popover.is-anchored{position:fixed;z-index:40;max-height:calc(100vh - 140px);overflow:auto}
 .viewer-bottom{height:auto;min-height:52px;padding-top:8px;padding-bottom:8px}
 .phone-ui.phone-view-open .viewer-bottom{background:var(--paper)!important}
+
+/* phones: the AOC fill pill sizes to its content, and the legend sits above the open controls sheet */
+.phone-ui .opacity-control{flex:0 0 auto!important;min-width:0!important;gap:7px;padding:0 12px;font-size:10px}
+.phone-ui .opacity-control input{width:74px}
+.phone-ui .opacity-control output{min-width:30px;text-align:right}
+.phone-ui.phone-view-open .terroir-legend{bottom:calc(var(--controls-sheet-h,260px) + 10px)}
+.phone-ui .opacity-control>.opacity-word{display:inline!important;letter-spacing:.06em}
