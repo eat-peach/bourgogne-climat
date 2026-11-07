@@ -1,0 +1,43 @@
+{
+  "id": "<string>",
+  "origin": [
+    "<number>",
+    "…"
+  ],
+  "bounds": [
+    "<number>",
+    "…"
+  ],
+  "cellMetres": "<number>",
+  "minAreaM2": "<number>",
+  "groundTypes": [
+    "<string>",
+    "…"
+  ],
+  "source": "<string>",
+  "streams": [
+    {
+      "p": [
+        "<number>",
+        "…"
+      ],
+      "a": [
+        "<number>",
+        "…"
+      ],
+      "t": [
+        "<number>",
+        "…"
+      ],
+      "s": [
+        "<number>",
+        "…"
+      ],
+      "l": [
+        "<number>",
+        "…"
+      ]
+    },
+    "…"
+  ]
+}

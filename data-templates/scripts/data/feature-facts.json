@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "<number>",
+  "generatedFrom": "<string>",
+  "generatedAt": "<string>",
+  "featureKey": "<string>",
+  "notes": [
+    "<string>",
+    "…"
+  ],
+  "citations": {
+    "terrain": {
+      "title": "<string>",
+      "url": "<string>"
+    },
+    "namedPlaces": {
+      "title": "<string>",
+      "url": "<string>"
+    },
+    "aoc": {
+      "title": "<string>",
+      "url": "<string>"
+    }
+  },
+  "counts": {
+    "climats": "<number>",
+    "parcels": "<number>"
+  },
+  "features": [
+    {
+      "key": "<string>",
+      "layer": "<string>",
+      "sourceId": "<string>",
+      "sourceVillageId": "<string>",
+      "sourceVillageName": "<string>",
+      "name": "<string>",
+      "mappedAreaM2": "<number>",
+      "mappedAreaStatus": "<string>",
+      "mappedAreaBasis": "<string>",
+      "altitude": {
+        "valueM": "<number>",
+        "method": "<string>",
+        "resolutionM": "<number>",
+        "source": "<string>",
+        "status": "<string>"
+      },
+      "sourceUrl": "<string>"
+    },
+    "…"
+  ]
+}

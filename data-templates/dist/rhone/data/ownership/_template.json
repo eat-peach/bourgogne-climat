@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "<number>",
+  "communeCode": "<string>",
+  "sourceAsOf": "<string>",
+  "source": "<string>",
+  "sourceUrl": "<string>",
+  "specificationUrl": "<string>",
+  "join": "<string>",
+  "parcels": {
+    "<id>": [
+      {
+        "entityName": "<string>",
+        "siren": "<string>",
+        "rightsCode": "<string>",
+        "rightsLabel": "<string>",
+        "sourceAsOf": "<string>"
+      }
+    ],
+    "…": "637 entries in the source file"
+  },
+  "coverage": {
+    "cadastreParcelCount": "<number>",
+    "matchedParcelCount": "<number>",
+    "missingOwnershipCount": "<number>"
+  }
+}

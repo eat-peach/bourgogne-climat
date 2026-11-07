@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "<number>",
+  "village": "<string>",
+  "method": {
+    "terrain": "<string>",
+    "slope": "<string>",
+    "aspect": "<string>",
+    "sun": "<string>",
+    "energyPct": "<string>"
+  },
+  "features": {
+    "<id>": {
+      "elevation": {
+        "min": "<number>",
+        "max": "<number>",
+        "mean": "<number>"
+      },
+      "slopePct": "<number>",
+      "slopeMaxPct": "<number>",
+      "aspectDeg": "<number>",
+      "aspect": "<string>",
+      "aspectConsistency": "<number>",
+      "sunHours": "<number>",
+      "sunHoursFlat": "<number>",
+      "energyPct": "<number>",
+      "cells": "<number>"
+    },
+    "…": "72 entries in the source file"
+  }
+}

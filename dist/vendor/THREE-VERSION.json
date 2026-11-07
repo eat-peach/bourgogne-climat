@@ -1,0 +1,15 @@
+{
+  "package": "three",
+  "version": "0.186.1",
+  "source": "https://registry.npmjs.org/three/-/three-0.186.1.tgz",
+  "imports": {
+    "three": "./three.module.js",
+    "three/addons/": "./"
+  },
+  "files": [
+    "three.module.js",
+    "three.core.js",
+    "OrbitControls.js",
+    "THREE-LICENSE"
+  ]
+}

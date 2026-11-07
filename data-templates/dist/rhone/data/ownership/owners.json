@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "<number>",
+  "sourceAsOf": "<string>",
+  "source": "<string>",
+  "fields": [
+    "<string>",
+    "…"
+  ],
+  "owners": [
+    [
+      "<string>",
+      "<string>",
+      "<string>",
+      "<number>",
+      "<number>",
+      {
+        "<id>": "<string>",
+        "…": "33 entries in the source file"
+      }
+    ],
+    "…"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "tile": [
+    "<number>",
+    "…"
+  ],
+  "size": "<number>",
+  "polygons": [
+    [
+      "<string>",
+      [
+        [
+          "<number>",
+          "…"
+        ]
+      ]
+    ],
+    "…"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "<number>",
+  "method": "<string>",
+  "parcels": {
+    "<id>": [
+      "<string>",
+      "…"
+    ],
+    "…": "117568 entries in the source file"
+  },
+  "crus": {
+    "<id>": [
+      "<string>",
+      "…"
+    ],
+    "…": "569 entries in the source file"
+  },
+  "climats": {
+    "<id>": "<string>",
+    "…": "11625 entries in the source file"
+  }
+}

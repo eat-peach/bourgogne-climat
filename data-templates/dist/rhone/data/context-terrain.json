@@ -1,0 +1,29 @@
+{
+  "version": "<number>",
+  "crs": "<string>",
+  "samplingMetres": "<number>",
+  "sourceResolutionMetres": "<number>",
+  "inputResolutionMetres": "<number>",
+  "gridSemantics": "<string>",
+  "tiles": [
+    {
+      "id": "<string>",
+      "bounds": [
+        "<number>",
+        "…"
+      ],
+      "gridSize": "<number>",
+      "heights": [
+        "<number>",
+        "…"
+      ],
+      "validMask": [
+        "<number>",
+        "…"
+      ],
+      "minElevation": "<number>",
+      "maxElevation": "<number>"
+    },
+    "…"
+  ]
+}

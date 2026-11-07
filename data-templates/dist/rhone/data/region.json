@@ -1,0 +1,44 @@
+{
+  "id": "<string>",
+  "title": "<string>",
+  "brand": "<string>",
+  "description": "<string>",
+  "classes": [
+    {
+      "key": "<string>",
+      "label": "<string>",
+      "tier": "<string>",
+      "rank": "<number>",
+      "colour": "<string>"
+    },
+    "…"
+  ],
+  "inaoSnapshot": "<string>",
+  "groups": [
+    {
+      "id": "<string>",
+      "label": "<string>",
+      "villages": [
+        "<string>",
+        "…"
+      ]
+    },
+    "…"
+  ],
+  "terrainExaggeration": "<number>",
+  "latLon": [
+    "<number>",
+    "…"
+  ],
+  "terms": {
+    "village": "<string>",
+    "villages": "<string>",
+    "Village": "<string>",
+    "Villages": "<string>",
+    "wineRegion": "<string>",
+    "WineRegion": "<string>",
+    "allWineRegions": "<string>",
+    "searchGroup": "<string>",
+    "classificationField": "<string>"
+  }
+}

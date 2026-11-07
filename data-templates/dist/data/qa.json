@@ -1,0 +1,13 @@
+{
+  "indexCount": "<number>",
+  "expectedCount": "<number>",
+  "duplicateIds": "<number>",
+  "missingScenes": [],
+  "nonFiniteHeights": [],
+  "heightLengthErrors": [],
+  "geometryOutOfBounds": [],
+  "filesBytes": "<number>",
+  "largestFileBytes": "<number>",
+  "textureUrlsChecked": "<number>",
+  "textureManifestCount": "<number>"
+}

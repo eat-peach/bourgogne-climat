@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "<number>",
+  "crs": "<string>",
+  "release": "<string>",
+  "attribution": "<string>",
+  "license": "<string>",
+  "communes": {
+    "<id>": {
+      "url": "<string>",
+      "bounds": [
+        "<number>",
+        "…"
+      ],
+      "parcelCount": "<number>",
+      "sourceUrl": "<string>",
+      "sourceDate": "<string>",
+      "skippedFeatureCount": "<number>"
+    },
+    "…": "46 entries in the source file"
+  }
+}

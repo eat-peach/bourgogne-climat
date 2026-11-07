@@ -1,0 +1,7 @@
+# Local development secrets for `wrangler dev`. Copy to .dev.vars (never commit it).
+# Cloudflare Turnstile test secret that always passes; production uses the real secret via `wrangler secret put`.
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+# Output of scripts/hash_admin_password.mjs for a local test password.
+ADMIN_PASSWORD_HASH=
+# Random string, at least 32 characters.
+IP_HASH_SALT=

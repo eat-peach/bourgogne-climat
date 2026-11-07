@@ -1,0 +1,249 @@
+{
+  "id": "rhone-nord",
+  "title": "Rhône Nord",
+  "brand": "RHÔNE NORD",
+  "description": "Interactive 3D atlas of the Northern Rhône crus, from Côte Rôtie to Saint-Péray.",
+  "site": "rhone",
+  "latLon": [45.3, 4.82],
+  "inaoSnapshot": "2026-10-19",
+  "terrainExaggeration": 2,
+  "terms": {
+    "village": "commune",
+    "villages": "communes",
+    "Village": "Commune",
+    "Villages": "Communes",
+    "wineRegion": "area",
+    "WineRegion": "Area",
+    "allWineRegions": "All areas",
+    "searchGroup": "Crus & lieux-dits",
+    "classificationField": "Appellation (Côte Rôtie, Saint-Joseph…)"
+  },
+  "pageReplacements": [
+    [
+      " A few sub-climats are defined by the atlas author from cadastral parcels.",
+      ""
+    ],
+    [
+      "AOC appellation boundaries, shown as informative overlays",
+      "AOC appellation boundaries (the eight Northern Rhône crus and Côtes du Rhône), shown as informative overlays"
+    ]
+  ],
+  "communes": [
+    "07009",
+    "07013",
+    "07015",
+    "07051",
+    "07056",
+    "07059",
+    "07070",
+    "07089",
+    "07097",
+    "07102",
+    "07140",
+    "07143",
+    "07152",
+    "07169",
+    "07174",
+    "07228",
+    "07234",
+    "07245",
+    "07281",
+    "07308",
+    "07312",
+    "07313",
+    "07317",
+    "07323",
+    "07324",
+    "07345",
+    "26038",
+    "26071",
+    "26110",
+    "26119",
+    "26156",
+    "26179",
+    "26250",
+    "26271",
+    "26341",
+    "26347",
+    "26380",
+    "42056",
+    "42132",
+    "42265",
+    "42272",
+    "42327",
+    "69007",
+    "69064",
+    "69193",
+    "69253"
+  ],
+  "classes": [
+    {
+      "key": "cote-rotie",
+      "label": "Côte Rôtie",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#b5473a",
+      "apps": [
+        "Côte Rôtie"
+      ]
+    },
+    {
+      "key": "condrieu",
+      "label": "Condrieu",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#e0b44a",
+      "apps": [
+        "Condrieu"
+      ]
+    },
+    {
+      "key": "chateau-grillet",
+      "label": "Château-Grillet",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#f0d27a",
+      "apps": [
+        "Château-Grillet"
+      ]
+    },
+    {
+      "key": "saint-joseph",
+      "label": "Saint-Joseph",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#7f4a8c",
+      "apps": [
+        "Saint-Joseph"
+      ]
+    },
+    {
+      "key": "hermitage",
+      "label": "Hermitage",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#e07b39",
+      "apps": [
+        "Hermitage ou Ermitage ou l'Hermitage ou l'Ermitage"
+      ]
+    },
+    {
+      "key": "crozes-hermitage",
+      "label": "Crozes-Hermitage",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#4d8fd6",
+      "apps": [
+        "Crozes-Hermitage ou Crozes-Ermitage"
+      ]
+    },
+    {
+      "key": "cornas",
+      "label": "Cornas",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#8c2f45",
+      "apps": [
+        "Cornas"
+      ]
+    },
+    {
+      "key": "saint-peray",
+      "label": "Saint-Péray",
+      "tier": "Cru",
+      "rank": 3,
+      "colour": "#6fae8c",
+      "apps": [
+        "Saint-Péray"
+      ]
+    },
+    {
+      "key": "regional",
+      "label": "Côtes du Rhône",
+      "tier": "Regional",
+      "rank": 1,
+      "colour": "#5f8668",
+      "apps": [
+        "Côtes du Rhône"
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "id": "cote-rotie-condrieu",
+      "label": "Côte Rôtie & Condrieu",
+      "communes": [
+        "69007",
+        "69193",
+        "69253",
+        "69064",
+        "42265",
+        "42327",
+        "42056",
+        "42132",
+        "42272",
+        "07143"
+      ]
+    },
+    {
+      "id": "saint-joseph",
+      "label": "Saint-Joseph",
+      "communes": [
+        "07009",
+        "07013",
+        "07015",
+        "07051",
+        "07056",
+        "07059",
+        "07089",
+        "07097",
+        "07102",
+        "07140",
+        "07152",
+        "07169",
+        "07174",
+        "07228",
+        "07234",
+        "07245",
+        "07308",
+        "07312",
+        "07313",
+        "07317",
+        "07324",
+        "07345"
+      ]
+    },
+    {
+      "id": "hermitage-crozes",
+      "label": "Hermitage & Crozes-Hermitage",
+      "communes": [
+        "26347",
+        "26110",
+        "26156",
+        "26038",
+        "26071",
+        "26119",
+        "26179",
+        "26250",
+        "26271",
+        "26341",
+        "26380"
+      ]
+    },
+    {
+      "id": "cornas-saint-peray",
+      "label": "Cornas & Saint-Péray",
+      "communes": [
+        "07070",
+        "07281",
+        "07323"
+      ]
+    }
+  ],
+  "fetch": {
+    "aocBufferM": 600,
+    "terrainResM": 5,
+    "orthoResM": 1,
+    "wfsTileM": 10000
+  }
+}

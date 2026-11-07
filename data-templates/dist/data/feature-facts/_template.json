@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "<number>",
+  "sourceVillageId": "<string>",
+  "featureKey": "<string>",
+  "features": [
+    {
+      "key": "<string>",
+      "layer": "<string>",
+      "sourceId": "<string>",
+      "sourceVillageId": "<string>",
+      "sourceVillageName": "<string>",
+      "name": "<string>",
+      "mappedAreaM2": "<number>",
+      "mappedAreaStatus": "<string>",
+      "mappedAreaBasis": "<string>",
+      "altitude": {
+        "valueM": "<number>",
+        "method": "<string>",
+        "resolutionM": "<number>",
+        "source": "<string>",
+        "status": "<string>"
+      },
+      "sourceUrl": "<string>",
+      "classification": "<string>",
+      "appellation": "<string>"
+    },
+    "…"
+  ],
+  "citations": {
+    "terrain": {
+      "title": "<string>",
+      "url": "<string>"
+    },
+    "aoc": {
+      "title": "<string>",
+      "url": "<string>"
+    }
+  }
+}

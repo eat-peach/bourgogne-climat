@@ -1,0 +1,11 @@
+{
+  "sunHours": [
+    "<number>",
+    "…"
+  ],
+  "slopePct": [
+    "<number>",
+    "…"
+  ],
+  "count": "<number>"
+}

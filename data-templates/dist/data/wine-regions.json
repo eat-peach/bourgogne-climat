@@ -1,0 +1,28 @@
+{
+  "version": "<number>",
+  "source": {
+    "authority": "<string>",
+    "retrieved": "<string>",
+    "urls": [
+      "<string>",
+      "…"
+    ],
+    "method": "<string>",
+    "assignmentFile": "<string>",
+    "boundaryNotes": {
+      "chatillonnais": "<string>",
+      "beaujolais": "<string>",
+      "maconnaisBoundary": "<string>",
+      "reviewedTransitions": "<string>"
+    }
+  },
+  "regions": [
+    {
+      "id": "<string>",
+      "label": "<string>",
+      "order": "<number>",
+      "rule": "<string>"
+    },
+    "…"
+  ]
+}

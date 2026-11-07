@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "<number>",
+  "crs": "<string>",
+  "communeCode": "<string>",
+  "sourceDate": "<string>",
+  "sourceUrl": "<string>",
+  "validation": {
+    "sourceFeatureCount": "<number>",
+    "skippedFeatureCount": "<number>"
+  },
+  "parcels": [
+    {
+      "id": "<string>",
+      "section": "<string>",
+      "number": "<string>",
+      "communeCode": "<string>",
+      "cadastralAreaM2": "<number>",
+      "mappedAreaM2": "<number>",
+      "bounds": [
+        "<number>",
+        "…"
+      ],
+      "rings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ]
+      ]
+    },
+    "…"
+  ]
+}

@@ -1,0 +1,38 @@
+# Applied by Cloudflare Workers static assets.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  X-Frame-Options: SAMEORIGIN
+
+# Payload folders are always requested with ?v=<assetVersion> (scripts/stamp_asset_version.py),
+# so browsers may keep them for a year. Root data files (index.json, texture-manifest.json,
+# communes, context terrain) keep Cloudflare's default revalidation, so a new assetVersion is seen at once.
+/data/scenes/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/textures/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/feature-facts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/cadastre/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/ownership/*
+  Cache-Control: public, max-age=31536000, immutable
+
+
+/vendor/*
+  Cache-Control: public, max-age=604800
+
+/admin
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  Content-Security-Policy: default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+
+/admin.html
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  Content-Security-Policy: default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'

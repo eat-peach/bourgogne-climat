@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bourgogne-climat",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-06-01",
+  // Served only on the custom domain (the daoyizhang.com zone must be on this Cloudflare account).
+  "routes": [{ "pattern": "climat.daoyizhang.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  // The atlas itself is static. Only /api/* runs the Worker; everything else is served straight from dist/.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "404-page"
+  },
+  "vars": {
+    // Public Turnstile site key for climat.daoyizhang.com (the secret key is a Worker secret).
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFkxcNVJkhM4SP5I",
+    // Turnstile tokens are accepted only when solved on this hostname.
+    "TURNSTILE_HOSTNAME": "climat.daoyizhang.com"
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "bourgogne-climat-feedback", "database_id": "9ef39c79-f27a-473b-b14e-e5a377d4bde9", "migrations_dir": "./migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "PHOTOS", "bucket_name": "bourgogne-climat-feedback-photos" }
+  ],
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,17 @@
+{
+  "<id>": {
+    "url": "<string>",
+    "urlAvif": "<string>",
+    "bounds": [
+      "<number>",
+      "…"
+    ],
+    "algorithmVersion": "<string>",
+    "coverageFraction": "<number>",
+    "width": "<number>",
+    "height": "<number>",
+    "sourceTileCount": "<number>",
+    "sourceSamplingMetres": "<number>"
+  },
+  "…": "52 entries in the source file"
+}

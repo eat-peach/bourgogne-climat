@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.log
+preview-screenshots/
+screenshots/
+.wrangler/
+.dev.vars
+node_modules/
+*.tmp
+
+# data is built locally and never committed here
+dist/data/
+dist/rhone/data/

@@ -1,0 +1,281 @@
+{
+  "id": "<string>",
+  "name": "<string>",
+  "bounds": [
+    "<number>",
+    "…"
+  ],
+  "gridSize": "<number>",
+  "heights": [
+    "<number>",
+    "…"
+  ],
+  "minElevation": "<number>",
+  "maxElevation": "<number>",
+  "parcels": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "appellation": "<string>",
+      "officialAppellation": "<string>",
+      "officialDenomination": "<string>",
+      "idApp": "<string>",
+      "idDenom": "<string>",
+      "insee": "<string>",
+      "sourceCommuneCode": {
+        "insee2020": "<string>",
+        "insee2011": "<string>",
+        "basis": "<string>"
+      },
+      "rings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ],
+        "…"
+      ],
+      "classification": "<string>",
+      "sourceOfficialId": "<string>",
+      "legalAreaM2": "<number>",
+      "displayAreaM2": "<number>",
+      "geometryScope": "<string>",
+      "eligibleAppellations": [
+        "<string>"
+      ],
+      "sourceUrl": "<string>",
+      "aocVerification": {
+        "snapshot": "<string>",
+        "officialAppellation": "<string>",
+        "officialDenomination": "<string>",
+        "officialTier": "<string>",
+        "geometryScope": "<string>",
+        "verificationStatus": "<string>",
+        "physicalStatus": "<string>",
+        "legalAreaM2": "<number>",
+        "displayAreaM2": "<number>",
+        "eligibleAppellations": [
+          "<string>"
+        ],
+        "sourceUrl": "<string>",
+        "evidenceUrls": [
+          "<string>"
+        ],
+        "note": "<string>",
+        "displayAreaScope": "<string>"
+      },
+      "legalAocEligibility": {
+        "status": "<string>",
+        "appellation": "<string>",
+        "source": "<string>",
+        "scope": "<string>"
+      },
+      "physicalScopeStatus": "<string>",
+      "displayClassification": "<string>",
+      "featureCommunes": [
+        "<string>"
+      ]
+    },
+    "…"
+  ],
+  "climats": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "displayName": "<string>",
+      "source": "<string>",
+      "sourceUrl": "<string>",
+      "identityAudit": "<string>",
+      "sourceFeatureId": "<string>",
+      "cadastralPieces": "<number>",
+      "mappedAreaM2": "<number>",
+      "mappedAreaStatus": "<string>",
+      "mappedAreaScope": "<string>",
+      "featureCommunes": [
+        "<string>",
+        "…"
+      ],
+      "featureCommuneCodes": [
+        "<string>",
+        "…"
+      ],
+      "communeBasis": "<string>",
+      "classificationStatus": "<string>",
+      "spatialAocEligibility": {
+        "basis": "<string>",
+        "sourceUrl": "<string>",
+        "snapshot": "<string>",
+        "threshold": {
+          "fullCoverageFraction": "<number>",
+          "minimumOverlapM2": "<number>",
+          "minimumCoverageFraction": "<number>"
+        },
+        "mappedAreaM2": "<number>",
+        "status": "<string>",
+        "matches": [
+          {
+            "appellation": "<string>",
+            "denomination": "<string>",
+            "tier": "<string>",
+            "intersectionAreaM2": "<number>",
+            "coverageFraction": "<number>",
+            "areaM2": "<number>"
+          },
+          "…"
+        ]
+      },
+      "aocDelimitedAreaM2": "<number>",
+      "rings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ]
+      ],
+      "aocSelectionRings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ],
+        "…"
+      ]
+    },
+    "…"
+  ],
+  "buildings": [
+    {
+      "rings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ]
+      ],
+      "height": "<number>"
+    },
+    "…"
+  ],
+  "roads": [
+    {
+      "coordinates": [
+        [
+          "<number>",
+          "…"
+        ],
+        "…"
+      ],
+      "kind": "<string>"
+    },
+    "…"
+  ],
+  "forests": [
+    {
+      "rings": [
+        [
+          [
+            "<number>",
+            "…"
+          ],
+          "…"
+        ]
+      ]
+    },
+    "…"
+  ],
+  "waterSurfaces": [
+    {
+      "rings": [
+        [
+          [
+            "<number>",
+            "…"
+          ],
+          "…"
+        ]
+      ]
+    },
+    "…"
+  ],
+  "waterLines": [
+    {
+      "coordinates": [
+        [
+          "<number>",
+          "…"
+        ],
+        "…"
+      ]
+    },
+    "…"
+  ],
+  "stats": {
+    "parcelCount": "<number>",
+    "climatCount": "<number>",
+    "buildingCount": "<number>",
+    "roadCount": "<number>",
+    "forestCount": "<number>",
+    "waterSurfaceCount": "<number>",
+    "waterLineCount": "<number>",
+    "terrainSource": "<string>",
+    "textureCoverage": "<boolean>",
+    "namedPlaceCount": "<number>"
+  },
+  "sources": {
+    "communes": "<string>",
+    "aoc": "<string>",
+    "climats": "<string>",
+    "buildings": "<string>",
+    "roads": "<string>",
+    "forests": "<string>",
+    "terrainFine": "<string>",
+    "terrainCoarse": "<string>",
+    "orthophoto": "<string>",
+    "crs": "<string>"
+  },
+  "coverage": {
+    "commune": "<string>",
+    "texture": "<string>",
+    "terrain": "<string>",
+    "textureFraction": "<number>"
+  },
+  "aocDataRepair": {
+    "version": "<number>",
+    "source": "<string>",
+    "sourcePath": "<string>",
+    "sourceDate": "<string>",
+    "classificationTable": "<string>",
+    "legalEligibilityField": "<string>",
+    "physicalScopeField": "<string>",
+    "physicalScopePolicy": "<string>",
+    "displayPolicy": "<string>"
+  },
+  "displayClassification": {
+    "version": "<number>",
+    "field": "<string>",
+    "displayField": "<string>",
+    "geometryField": "<string>",
+    "hierarchy": [
+      "<string>",
+      "…"
+    ],
+    "maskScope": "<string>",
+    "sourceGeometry": "<string>"
+  }
+}

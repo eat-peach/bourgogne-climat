@@ -1,0 +1,160 @@
+{
+  "id": "<string>",
+  "name": "<string>",
+  "bounds": [
+    "<number>",
+    "…"
+  ],
+  "gridSize": "<number>",
+  "heights": [
+    "<number>",
+    "…"
+  ],
+  "minElevation": "<number>",
+  "maxElevation": "<number>",
+  "parcels": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "appellation": "<string>",
+      "officialAppellation": "<string>",
+      "officialDenomination": "<string>",
+      "insee": "<string>",
+      "classification": "<string>",
+      "displayClassification": "<string>",
+      "legalAreaM2": "<number>",
+      "displayAreaM2": "<number>",
+      "geometryScope": "<string>",
+      "eligibleAppellations": [
+        "<string>"
+      ],
+      "sourceUrl": "<string>",
+      "aocVerification": {
+        "snapshot": "<string>",
+        "officialAppellation": "<string>",
+        "officialDenomination": "<string>",
+        "officialTier": "<string>",
+        "inaoName": "<string>",
+        "geometryScope": "<string>",
+        "verificationStatus": "<string>",
+        "physicalStatus": "<string>",
+        "legalAreaM2": "<number>",
+        "displayAreaM2": "<number>",
+        "eligibleAppellations": [
+          "<string>"
+        ],
+        "sourceUrl": "<string>",
+        "evidenceUrls": [
+          "<string>"
+        ],
+        "note": "<string>",
+        "displayAreaScope": "<string>"
+      },
+      "featureCommunes": [
+        "<string>"
+      ],
+      "rings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ],
+        "…"
+      ]
+    },
+    "…"
+  ],
+  "climats": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "displayName": "<string>",
+      "source": "<string>",
+      "sourceUrl": "<string>",
+      "identityAudit": "<string>",
+      "sourceFeatureId": "<string>",
+      "cadastralPieces": "<number>",
+      "mappedAreaM2": "<number>",
+      "mappedAreaStatus": "<string>",
+      "mappedAreaScope": "<string>",
+      "featureCommunes": [
+        "<string>"
+      ],
+      "featureCommuneCodes": [
+        "<string>"
+      ],
+      "insee": "<string>",
+      "spatialAocEligibility": {
+        "basis": "<string>",
+        "sourceUrl": "<string>",
+        "snapshot": "<string>",
+        "threshold": {
+          "fullCoverageFraction": "<number>",
+          "minimumOverlapM2": "<number>",
+          "minimumCoverageFraction": "<number>"
+        },
+        "mappedAreaM2": "<number>",
+        "status": "<string>",
+        "matches": [
+          {
+            "appellation": "<string>",
+            "denomination": "<string>",
+            "tier": "<string>",
+            "intersectionAreaM2": "<number>",
+            "coverageFraction": "<number>",
+            "areaM2": "<number>"
+          },
+          "…"
+        ]
+      },
+      "rings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ]
+      ]
+    },
+    "…"
+  ],
+  "buildings": [],
+  "roads": [],
+  "forests": [],
+  "waterSurfaces": [],
+  "waterLines": [],
+  "stats": {
+    "parcelCount": "<number>",
+    "climatCount": "<number>",
+    "namedPlaceCount": "<number>",
+    "buildingCount": "<number>",
+    "roadCount": "<number>",
+    "forestCount": "<number>",
+    "waterSurfaceCount": "<number>",
+    "waterLineCount": "<number>",
+    "terrainSource": "<string>",
+    "textureCoverage": "<boolean>"
+  },
+  "sources": {
+    "aoc": "<string>",
+    "lieuxDits": "<string>",
+    "terrain": "<string>",
+    "orthophoto": "<string>",
+    "landscape": "<string>",
+    "crs": "<string>"
+  },
+  "coverage": {
+    "commune": "<string>",
+    "texture": "<string>",
+    "terrain": "<string>",
+    "terrainEdgeFillUsed": "<boolean>",
+    "terrainEdgeFillCount": "<number>"
+  }
+}

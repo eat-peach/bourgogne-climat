@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "<number>",
+  "sourceAsOf": "<string>",
+  "source": "<string>",
+  "sourceUrl": "<string>",
+  "specificationUrl": "<string>",
+  "departments": [
+    "<string>",
+    "…"
+  ],
+  "sourceHashes": {
+    "<id>": "<string>",
+    "…": "4 entries in the source file"
+  },
+  "communes": {
+    "<id>": {
+      "path": "<string>",
+      "cadastreParcelCount": "<number>",
+      "matchedParcelCount": "<number>",
+      "missingOwnershipCount": "<number>"
+    },
+    "…": "376 entries in the source file"
+  },
+  "validation": {
+    "join": "<string>",
+    "fuzzyMatches": "<number>",
+    "privateOwnersInferred": "<number>",
+    "cadastreParcelCount": "<number>",
+    "matchedParcelCount": "<number>",
+    "unmatchedParcelCount": "<number>"
+  },
+  "owners": {
+    "path": "<string>",
+    "count": "<number>"
+  }
+}

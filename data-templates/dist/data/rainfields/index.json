@@ -1,0 +1,11 @@
+{
+  "cellMetres": "<number>",
+  "source": "<string>",
+  "villages": {
+    "<id>": [
+      "<number>",
+      "…"
+    ],
+    "…": "305 entries in the source file"
+  }
+}

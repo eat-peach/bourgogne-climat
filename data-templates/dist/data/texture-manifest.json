@@ -1,0 +1,19 @@
+{
+  "<id>": {
+    "url": "<string>",
+    "bounds": [
+      "<number>",
+      "…"
+    ],
+    "algorithmVersion": "<string>",
+    "coverageFraction": "<number>",
+    "width": "<number>",
+    "height": "<number>",
+    "sourceTileCount": "<number>",
+    "sourceTileTotal": "<number>",
+    "sourceSamplingMetres": "<number>",
+    "displayPixelsPerTile": "<number>",
+    "urlAvif": "<string>"
+  },
+  "…": "400 entries in the source file"
+}

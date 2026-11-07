@@ -1,0 +1,24 @@
+{
+  "version": "<number>",
+  "crs": "<string>",
+  "count": "<number>",
+  "villages": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "department": "<string>",
+      "region": "<string>",
+      "center": [
+        "<number>",
+        "…"
+      ],
+      "bounds2154": [
+        "<number>",
+        "…"
+      ],
+      "scene": "<string>",
+      "texture": null
+    },
+    "…"
+  ]
+}

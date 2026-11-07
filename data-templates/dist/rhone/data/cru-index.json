@@ -1,0 +1,13 @@
+{
+  "crus": [
+    {
+      "name": "<string>",
+      "full": "<string>",
+      "class": "<string>",
+      "village": "<string>",
+      "id": "<string>",
+      "layer": "<string>"
+    },
+    "…"
+  ]
+}

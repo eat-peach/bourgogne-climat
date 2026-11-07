@@ -1,0 +1,29 @@
+{
+  "crs": "<string>",
+  "communes": [
+    {
+      "code": "<string>",
+      "name": "<string>",
+      "bounds": [
+        "<number>",
+        "…"
+      ],
+      "rings": [
+        [
+          [
+            [
+              "<number>",
+              "…"
+            ],
+            "…"
+          ]
+        ]
+      ],
+      "centroid": [
+        "<number>",
+        "…"
+      ]
+    },
+    "…"
+  ]
+}

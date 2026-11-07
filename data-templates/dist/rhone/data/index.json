@@ -1,0 +1,32 @@
+{
+  "version": "<number>",
+  "crs": "<string>",
+  "count": "<number>",
+  "namedPlaceCount": "<number>",
+  "region": "<string>",
+  "villages": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "department": "<string>",
+      "region": "<string>",
+      "center": [
+        "<number>",
+        "…"
+      ],
+      "bounds2154": [
+        "<number>",
+        "…"
+      ],
+      "scene": "<string>",
+      "texture": "<string>",
+      "textureAvif": "<string>",
+      "areaKm2": "<number>",
+      "aocBounds2154": [
+        "<number>",
+        "…"
+      ]
+    },
+    "…"
+  ]
+}

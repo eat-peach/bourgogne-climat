@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f4f0e8" />
+  <title>About & legal · Bourgogne Climat</title>
+  <meta name="description" content="Disclaimer, data sources and licences, privacy notice and terms for submissions on Bourgogne Climat." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%237b2431'/%3E%3Cpath d='M8 20c4-9 11-9 16 0' fill='none' stroke='%23e6c389' stroke-width='2'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    /* The atlas stylesheet locks the page for the 3D view; this page scrolls like a document. */
+    html, body { height: auto; overflow: auto; }
+    body { background: var(--paper); color: var(--ink); }
+    .legal { max-width: 720px; margin: 0 auto; padding: 36px 20px 72px; font: 15px/1.65 var(--sans); }
+    .legal-back { font: 600 11px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--wine); text-decoration: none; }
+    .legal h1 { font: 600 34px/1.15 'Source Serif 4', var(--serif); margin: 22px 0 6px; }
+    .legal .updated { color: var(--muted); font-size: 13px; margin: 0 0 28px; }
+    .legal nav { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; margin-bottom: 30px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; }
+    .legal nav a { color: var(--wine); text-decoration: none; }
+    .legal h2 { font: 600 22px/1.25 'Source Serif 4', var(--serif); margin: 40px 0 10px; scroll-margin-top: 16px; }
+    .legal h3 { font: 600 11px/1.3 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--wine); margin: 24px 0 6px; }
+    .legal p, .legal li { margin: 0 0 10px; }
+    .legal ul { padding-left: 20px; margin: 0 0 12px; }
+    .legal a { color: var(--wine); }
+    .legal table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 6px 0 14px; }
+    .legal th, .legal td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); }
+    .legal th { font-weight: 600; color: var(--muted); font-size: 12px; }
+    .legal .note { background: var(--paper-deep); border-left: 3px solid var(--gold); padding: 12px 14px; font-size: 14px; }
+    @media (max-width: 560px) { .legal h1 { font-size: 28px; } .legal table, .legal thead, .legal tbody, .legal tr, .legal th, .legal td { display: block; } .legal thead { display: none; } .legal td { border: 0; padding: 0 0 4px; } .legal tr { border-bottom: 1px solid var(--line); padding: 8px 0; } .legal td:first-child { font-weight: 600; } }
+  </style>
+</head>
+<body>
+  <main class="legal">
+    <a class="legal-back" href="./">← Back to the atlas</a>
+    <h1>About &amp; legal</h1>
+    <p class="updated">Last updated 25 October 2026</p>
+    <nav aria-label="On this page">
+      <a href="#disclaimer">Disclaimer</a><a href="#sources">Sources &amp; licences</a><a href="#privacy">Privacy</a><a href="#submissions">Submissions</a><a href="#contact">Contact</a>
+    </nav>
+
+    <p>Bourgogne Climat is a free, non-commercial 3D atlas of the Burgundy vineyards, from Chablis to Beaujolais, created by Daoyi Zhang, with a companion <a href="./rhone/">Rhône Nord</a> atlas of the Northern Rhône crus. These notes cover both. It was built with the help of AI tools from public open data.</p>
+
+    <h2 id="disclaimer">Disclaimer</h2>
+    <p class="note">The atlas is for information only. It is not a legal survey and has no legal value. The official AOC delimitations are the plans published by INAO and filed with each commune.</p>
+    <ul>
+      <li><strong>Not verified plot by plot.</strong> The atlas joins large public datasets, and it has not been checked parcel by parcel. Boundaries, names, classifications, areas and elevations may contain errors or be out of date.</li>
+      <li><strong>Boundaries are drawn from the INAO digital data</strong>, which INAO itself publishes for information. Where a lieu-dit or parcel overlaps several appellations, the atlas shows a calculated split.</li>
+      <li><strong>Ownership</strong> comes from the public DGFiP file of parcels owned by legal entities (companies, groups, associations, public bodies) as of 1 January 2025. Parcels owned by private individuals are not in that file, so a missing owner does not mean the parcel has none. Ownership may have changed since.</li>
+      <li><strong>No liability.</strong> Do not rely on the atlas for purchases, sales, labelling, declarations or any legal, financial or regulatory decision. The author accepts no liability for decisions made using it.</li>
+      <li><strong>Independent.</strong> The atlas is not affiliated with or endorsed by INAO, IGN, the DGFiP, Etalab, the BIVB, any producer body or any domaine. Names of appellations, climats and estates are used only to describe places.</li>
+    </ul>
+
+    <h2 id="sources">Data sources &amp; licences</h2>
+    <p>All datasets are French public open data published under the <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/" rel="noopener">Licence Ouverte / Open Licence 2.0</a>. They have been transformed for the atlas (reprojected, simplified, joined and recoloured); any errors come from those transformations or from the atlas, not from the publishers.</p>
+    <table>
+      <thead><tr><th>Layer</th><th>Source</th><th>Version used</th></tr></thead>
+      <tbody>
+        <tr><td>AOC boundaries</td><td>INAO, <a href="https://www.data.gouv.fr/datasets/delimitation-parcellaire-des-aoc-viticoles-de-linao" rel="noopener">Délimitation parcellaire des AOC viticoles</a></td><td>19 October 2026</td></tr>
+        <tr><td>Lieux-dits and cadastral parcels</td><td>DGFiP cadastre, distributed by <a href="https://cadastre.data.gouv.fr/" rel="noopener">Cadastre Etalab</a></td><td>Release of 1 September 2026</td></tr>
+        <tr><td>Parcel ownership (legal entities)</td><td>DGFiP, <a href="https://data.economie.gouv.fr/explore/dataset/fichiers-des-locaux-et-des-parcelles-des-personnes-morales/" rel="noopener">Fichiers des locaux et des parcelles des personnes morales</a></td><td>Situation at 1 January 2025</td></tr>
+        <tr><td>Terrain</td><td>IGN, RGE ALTI® (1 m and 25 m)</td><td>Downloaded September–October 2026</td></tr>
+        <tr><td>Geology</td><td>BRGM, <a href="https://infoterre.brgm.fr/telechargements/BDCharm50/" rel="noopener">BD Charm-50</a>, harmonised 1:50,000 geological maps (Côte-d’Or, Saône-et-Loire, Yonne, Rhône, Loire, Ardèche, Drôme)</td><td>Downloaded November 2026</td></tr>
+        <tr><td>Aerial imagery</td><td>IGN, BD ORTHO® orthophotography</td><td>Downloaded September–October 2026</td></tr>
+        <tr><td>Buildings, roads, water, woodland</td><td>IGN, BD TOPO®</td><td>Downloaded September–October 2026</td></tr>
+      </tbody>
+    </table>
+    <p>Terroir figures (slope, aspect, elevation range and direct sun hours) are computed by the atlas from IGN RGE ALTI® terrain; sun hours are a clear-sky model with hill shading, for comparing places, not a weather record. Geology percentages are each formation’s share of an area on BRGM’s 1:50,000 map, which shows surface deposits such as scree and colluvium where they cover the bedrock; its boundaries are good to a few tens of metres.</p>
+    <p>A few sub-climats are defined by the atlas author from cadastral parcels. The 3D rendering uses <a href="https://threejs.org/" rel="noopener">three.js</a> (MIT licence) and the Source Serif 4 typeface (SIL Open Font Licence).</p>
+
+    <h2 id="privacy">Privacy notice</h2>
+    <p>Browsing the atlas does not require an account, and the site uses no analytics, advertising or tracking cookies, and stores nothing in your browser.</p>
+
+    <h3>When you send feedback or a correction</h3>
+    <p>The feedback and correction forms are the only place where the atlas collects personal data:</p>
+    <ul>
+      <li>your message, and the map place you are commenting on;</li>
+      <li>your name and email, only if you choose to give them;</li>
+      <li>photos you attach (they are resized and their location data is removed in your browser before upload);</li>
+      <li>your browser type, approximate country, and a salted, one-way hash of your IP address. The IP address itself is not stored; the hash is used only to limit abuse and repeated submissions.</li>
+    </ul>
+    <p><strong>Why and on what basis:</strong> to review and correct the atlas and, if you left an email, to reply. You give consent by ticking the box on the form. You can withdraw it at any time by asking for your submission to be deleted.</p>
+    <p><strong>Who can see it:</strong> only the atlas author. Submissions are never published on the site and are not sold or shared.</p>
+    <p><strong>How long it is kept:</strong> as long as it is useful for reviewing and correcting the atlas, and no longer than 24 months. Photos are deleted together with their submission.</p>
+    <p><strong>Where it is stored:</strong> the site, its database and photo storage are hosted by Cloudflare, Inc., which processes data on the author's behalf and may do so outside your country. Submissions are protected by <a href="https://www.cloudflare.com/products/turnstile/" rel="noopener">Cloudflare Turnstile</a>, which checks that a person, not a bot, is sending the form; see <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare's privacy policy</a>. Like any web host, Cloudflare also processes technical data such as IP addresses to deliver and protect the site.</p>
+    <p><strong>Your rights:</strong> you can ask to see, correct or delete what you sent, and you can complain to your data protection authority. To make a request, use the contact below and include the reference shown after you submitted, if you have it.</p>
+
+    <h2 id="submissions">Terms for submissions</h2>
+    <ul>
+      <li>Send only photos you took yourself or have permission to share, and do not include images of identifiable people without their consent.</li>
+      <li>You keep the rights to your photos and text. By submitting, you allow the atlas author to use them to review and improve the atlas. Photos are not published without asking you first.</li>
+      <li>The author may decline, edit or delete any submission, and corrections are applied at the author's discretion.</li>
+      <li>Do not send abusive, unlawful or promotional content, or personal data about other people.</li>
+    </ul>
+
+    <h2 id="contact">Contact</h2>
+    <p>For questions, corrections, data requests or takedown requests, use the <a href="./">Feedback</a> button at the top of the atlas and choose “Something else”. Leave an email address if you would like a reply.</p>
+    <p>These notes may be updated as the atlas changes; the date at the top shows the latest version.</p>
+  </main>
+</body>
+</html>

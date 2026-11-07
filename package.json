@@ -1,0 +1,9 @@
+{
+  "name": "burgundy-atlas-static",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "python scripts/validate_site.py",
+    "serve": "python scripts/serve.py"
+  }
+}

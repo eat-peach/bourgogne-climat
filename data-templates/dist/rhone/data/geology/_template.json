@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "<number>",
+  "village": "<string>",
+  "source": "<string>",
+  "features": {
+    "<id>": [
+      [
+        "<string>",
+        "<number>"
+      ],
+      "…"
+    ],
+    "…": "82 entries in the source file"
+  }
+}

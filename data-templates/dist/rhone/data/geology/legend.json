@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "<number>",
+  "source": "<string>",
+  "sourceUrl": "<string>",
+  "licence": "<string>",
+  "tileSize": "<number>",
+  "tiles": [
+    "<string>",
+    "…"
+  ],
+  "units": {
+    "<id>": {
+      "notation": "<string>",
+      "descr": "<string>",
+      "en": "<string>",
+      "age": "<string>",
+      "colour": "<string>",
+      "water": "<boolean>"
+    },
+    "…": "165 entries in the source file"
+  }
+}

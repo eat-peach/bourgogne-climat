@@ -1,0 +1,34 @@
+{
+  "version": "<number>",
+  "crs": "<string>",
+  "count": "<number>",
+  "sourceNamedPlaceCount": "<number>",
+  "namedPlaceCount": "<number>",
+  "physicalCommuneCount": "<number>",
+  "villages": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "department": "<string>",
+      "region": "<string>",
+      "center": [
+        "<number>",
+        "…"
+      ],
+      "bounds2154": [
+        "<number>",
+        "…"
+      ],
+      "scene": "<string>",
+      "texture": "<string>",
+      "areaKm2": "<number>",
+      "aocBounds2154": [
+        "<number>",
+        "…"
+      ],
+      "textureAvif": "<string>"
+    },
+    "…"
+  ],
+  "assetVersion": "<string>"
+}
