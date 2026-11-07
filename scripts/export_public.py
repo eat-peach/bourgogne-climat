@@ -19,7 +19,7 @@ SITE = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = SITE.parent / 'github-export'
 
 INCLUDE = [r'^dist/(?!data/|rhone/data/)', r'^scripts/', r'^tests/', r'^migrations/', r'^worker/', r'^regions/[^/]+/region\.json$',
-           r'^performance/[^/]+\.(mjs|md)$', r'^(wrangler\.jsonc|package\.json|README\.md|start-local\.ps1|\.gitignore|\.dev\.vars\.example)$']
+           r'^performance/[^/]+\.(mjs|md)$', r'^public-repo/', r'^(wrangler\.jsonc|package\.json|README\.md|start-local\.ps1|\.gitignore|\.dev\.vars\.example)$']
 EXCLUDE = [r'\.(tif|tiff|gpkg)$', r'^dist/data/', r'^dist/rhone/data/', r'^scripts/data/']
 DATA_ROOTS = ['dist/data', 'dist/rhone/data', 'scripts/data']
 MAP_KEYS = 8          # a dict with more keys than this whose keys look like ids is a lookup table: keep one entry
@@ -129,8 +129,16 @@ def main():
     for p in files:
         dst = out / p; dst.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(SITE / p, dst)
     n = templates(out)
+    # public-repo/ holds the repository's own README (English and Chinese) and its screenshots; it replaces the
+    # internal development README at the top of the export
+    public = out / 'public-repo'
+    if public.exists():
+        for f in public.rglob('*'):
+            if f.is_file():
+                dst = out / f.relative_to(public); dst.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(f, dst)
+        shutil.rmtree(public)
     readme = out / 'README.md'
-    if readme.exists():
+    if readme.exists() and 'data-templates/' not in readme.read_text('utf8'):
         note = ('\n\n## Data\n\nThis repository holds the code only. The data payloads under `dist/data/` and `dist/rhone/data/` '
                 'are not included; [data-templates/](data-templates/README.md) shows the layout and keys of every data file, '
                 'and the scripts in `scripts/` build them from public sources.\n')
