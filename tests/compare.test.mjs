@@ -26,7 +26,7 @@ test('rows cover area, elevation, slope, aspect, sun, geology and legal-entity o
 
 test('a comparison is part of the shareable link and survives flying between A and B', () => {
   assert.match(app, /p\.set\('cmp',\[compare\.a,compare\.b\]\.map\(x=>`\$\{x\.layer\}:\$\{x\.id\}@\$\{x\.villageId\}`\)\.join\(','\)\)/);
-  assert.match(app, /const cmp=params\.get\('cmp'\);if\(cmp\)await restoreCompare\(cmp\);/);
+  assert.match(app, /const cmp=params\.get\('cmp'\);if\(cmp\)await restoreCompare\(cmp,params\.get\('cmpv'\)\);/);
   assert.match(app, /if\(!feature\)\{renderCompare\(\);return true;\}/);
 });
 

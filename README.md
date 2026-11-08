@@ -21,8 +21,11 @@ sun it gets and the rock beneath it.
   modelled hours of direct sun and the geology under it.
 - **Shade the map by terroir.** Colour the vineyards by slope, aspect, sun hours or geology instead of appellation.
 - **Compare two crus.** Put any two crus side by side, even at opposite ends of the Côte: matching same-scale maps
-  with contours and parcels, then area, elevation, slope, aspect, sun hours, geology and the largest owners. Show both
-  on the 3D map from the best viewing angle, and save the comparison as an image.
+  with contours and parcels, the same maps on the geological map, or one laid over the other; a slope profile from top
+  to bottom with the rock underneath; then area, elevation, slope, aspect, sun hours, geology and the largest owners.
+  Show both on the 3D map from the best viewing angle, and save the comparison as an image.
+- **Guided tour.** A short "How to use" tour on the web and on phones points at each control, with illustrated steps
+  for geology shading and comparing.
 - **Share exactly what you see.** The address keeps the view, the selected plot, the layers and the comparison, so a
   copied link opens the same map for someone else.
 - **Sun & rain.** Watch the sun and shadows move over the hills for any date and time, and see how a storm's rain
@@ -43,14 +46,24 @@ sun it gets and the rock beneath it.
 
 ### Compare two crus
 
-Chambertin and Chambertin-Clos de Bèze side by side: both outlined on the 3D map, with same-scale maps and the
-figures for each.
+Chambertin and Montrachet, at opposite ends of the Côte d'Or. The small maps switch between **Parcels**, **Geology**
+and **Overlay**, and **Down the slope** draws both crus from top to bottom with the rock underneath.
 
-![Chambertin and Chambertin-Clos de Bèze compared, both outlined on the 3D map](docs/images/compare.jpg)
+![Chambertin and Montrachet compared: the geology maps and the slope profile](docs/images/compare.jpg)
 
-| Saved comparison image | On a phone |
+| Overlay and slope profile | Saved comparison image |
 |---|---|
-| ![The comparison saved as an image](docs/images/compare-export.jpg) | ![Comparing two crus on a phone: the map, and the comparison sheet](docs/images/phone-compare.jpg) |
+| ![The two crus laid over each other, each turned so downhill points down, above the slope profile](docs/images/compare-overlay.jpg) | ![The comparison saved as one image](docs/images/compare-export.jpg) |
+
+![Comparing two crus on a phone: the map, and the comparison sheet](docs/images/phone-compare.jpg)
+
+### How to use
+
+A guided tour on the first visit (and from **How to use** at any time) points at each control in turn.
+
+| Web | Phone |
+|---|---|
+| ![The tour explaining Shade by geology](docs/images/tour-desktop.jpg) | ![The tour explaining how to read a comparison](docs/images/tour-phone.jpg) |
 
 ## Data sources
 

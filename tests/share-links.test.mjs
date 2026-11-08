@@ -25,3 +25,8 @@ test('opening a link restores the same things it records', () => {
   assert.match(app, /waitForFeature\(layer,id\)/);
   assert.match(app, /showOwner\(o\);window\.atlasSearchDrop\?\.open\(input\)/);
 });
+
+test('a compare link keeps the map style (geology or overlay)', () => {
+  assert.match(app, /if\(compare\.mapView&&compare\.mapView!=='parcels'\)p\.set\('cmpv',compare\.mapView\)/);
+  assert.match(app, /await restoreCompare\(cmp,params\.get\('cmpv'\)\)/);
+});
