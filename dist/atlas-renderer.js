@@ -15,7 +15,10 @@ const CLASS_CSS = { 'Grand Cru': '#e3b23c', 'Premier Cru': '#4d8fd6', Village: '
 const LAYERS = ['climats', 'parcels', 'cadastre', 'buildings', 'roads', 'forest', 'water'];
 const EXAGGERATIONS = [1, 2, 3, 4];
 const MAX_RASTER_SIZE = 2048;
-const IMAGE_CACHE_LIMIT = 48;
+// Decoded photo tiles kept for reuse. Phones get a smaller cache: 48 tiles are ~135 MB of decoded images, and on an
+// iPhone that, with the 3D scene, can exhaust memory and leave the ground drawn black.
+const SMALL_DEVICE = typeof window !== 'undefined' && (window.matchMedia?.('(max-width: 760px), (pointer: coarse) and (max-width: 1100px)')?.matches || /iPhone|iPad|Android/i.test(navigator.userAgent || ''));
+const IMAGE_CACHE_LIMIT = SMALL_DEVICE ? 14 : 48;
 // Aerial photos look flat under the map's bright, neutral lights, so their colours are strengthened in the terrain shader.
 // Viewers can change brightness, lightness and saturation in Display settings, relative to the default look below.
 export const DISPLAY_DEFAULTS = Object.freeze({ brightness: 1, lightness: 0, saturation: 1.7 });

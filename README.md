@@ -20,6 +20,11 @@ sun it gets and the rock beneath it.
 - **Read a plot's terroir.** Click any lieu-dit or appellation area for its area, elevation range, slope, aspect,
   modelled hours of direct sun and the geology under it.
 - **Shade the map by terroir.** Colour the vineyards by slope, aspect, sun hours or geology instead of appellation.
+- **Compare two crus.** Put any two crus side by side, even at opposite ends of the Côte: matching same-scale maps
+  with contours and parcels, then area, elevation, slope, aspect, sun hours, geology and the largest owners. Show both
+  on the 3D map from the best viewing angle, and save the comparison as an image.
+- **Share exactly what you see.** The address keeps the view, the selected plot, the layers and the comparison, so a
+  copied link opens the same map for someone else.
 - **Sun & rain.** Watch the sun and shadows move over the hills for any date and time, and see how a storm's rain
   runs off the slopes.
 - **Find places and owners.** Search villages and crus, or search the legal entities (domaines, GFA, SCI…) recorded
@@ -35,6 +40,17 @@ sun it gets and the rock beneath it.
 | ![Lieux-dits shaded by modelled April–September sun hours](docs/images/sun.jpg) | ![Hermitage and Crozes-Hermitage around Tain-l'Hermitage](docs/images/rhone.jpg) |
 
 ![The atlas on a phone: the map, and the info sheet for La Tâche](docs/images/phone.jpg)
+
+### Compare two crus
+
+Chambertin and Chambertin-Clos de Bèze side by side: both outlined on the 3D map, with same-scale maps and the
+figures for each.
+
+![Chambertin and Chambertin-Clos de Bèze compared, both outlined on the 3D map](docs/images/compare.jpg)
+
+| Saved comparison image | On a phone |
+|---|---|
+| ![The comparison saved as an image](docs/images/compare-export.jpg) | ![Comparing two crus on a phone: the map, and the comparison sheet](docs/images/phone-compare.jpg) |
 
 ## Data sources
 
