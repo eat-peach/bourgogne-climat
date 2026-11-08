@@ -377,29 +377,61 @@ async function showOwnerCommune(c){if(!c||!renderer)return;const parcels=await o
  drop.addEventListener('click',e=>{const row=e.target.closest?.('.village-row');if(row&&!row.matches('.owner-row,.is-other'))setTimeout(closeDrop,0);});
  wide.addEventListener?.('change',closeDrop);}
 window.atlasPhoneUI?.apply();
-// Phones, first visit: a short guide that points at the search pill, the round buttons, the map and Sun & rain.
-// Shown once (remembered in this browser); "How to use" in the menu drawer shows it again.
-{const KEY='atlas.phoneGuideSeen';
- const steps=[
-  {target:'.phone-chrome .top-search',title:'Search',text:'Find a village or cru here. Tap the person icon to search owners instead, and ☰ for the navigator and menu.'},
-  {target:'.phone-fabs',title:'Map buttons',text:'View settings (layers, terrain, Aerial or Atlas), details of what you selected, home, save an image, and display settings.'},
-  {target:'#terrain-canvas',title:'Moving the map',html:'<span class="gesture-grid"><div class="gesture"><span class="gesture-art g-drag"><i></i><i></i></span><span><b>One finger</b> drag to move the map</span></div><div class="gesture"><span class="gesture-art g-pinch"><i></i><i></i></span><span><b>Two fingers</b> pinch to zoom</span></div><div class="gesture"><span class="gesture-art g-twist"><i></i><i></i></span><span><b>Two fingers</b> twist to turn</span></div><div class="gesture"><span class="gesture-art g-tilt"><i></i><i></i></span><span><b>Two fingers</b> slide up or down to tilt</span></div></span>Tap a vineyard or parcel to see its details.',pad:-70},
-  {target:'#simulate-button',title:'Sun and rain',text:'See where the sun falls through the day, or how rain runs down the slopes.'}];
- let layer=null,i=0;
- const finish=()=>{layer?.remove();layer=null;try{localStorage.setItem(KEY,'1');}catch{}};
- const show=()=>{const step=steps[i],el=document.querySelector(step.target);if(!el){finish();return;}
+// "How to use": one guided tour for web and phones. Each step dims the page around the control it explains and shows a
+// card beside it, some with a small illustration (geology shading, comparing two crus). Shown once on a first visit
+// (remembered in this browser); "How to use" in the footer (web) or the menu drawer (phone) runs it again, and its
+// last card opens the full list of features and controls.
+{const KEY='atlas.guideSeen.v3';
+ const isPhone=()=>document.documentElement.classList.contains('phone-ui');
+ const pick=(web,phone)=>isPhone()?phone:web;
+ const visible=sel=>[...document.querySelectorAll(sel)].find(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(el).visibility!=='hidden';})||null;
+ const CMP_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M16 4v16M4 8h4M16 16h4"/></svg>';
+ const art={
+  mouse:'<span class="tour-keys"><span><kbd>Drag</kbd>rotate (Pan in the bar)</span><span><kbd>Shift</kbd>+ drag to pan</span><span><kbd>Scroll</kbd>zoom</span><span><kbd>Double-click</kbd>focus there</span></span>',
+  touch:'<span class="gesture-grid"><div class="gesture"><span class="gesture-art g-drag"><i></i><i></i></span><span><b>One finger</b> drag to move</span></div><div class="gesture"><span class="gesture-art g-pinch"><i></i><i></i></span><span><b>Two fingers</b> pinch to zoom</span></div><div class="gesture"><span class="gesture-art g-twist"><i></i><i></i></span><span><b>Two fingers</b> twist to turn</span></div><div class="gesture"><span class="gesture-art g-tilt"><i></i><i></i></span><span><b>Two fingers</b> slide to tilt</span></div></span>',
+  panel:'<span class="ta ta-panel"><span class="ta-tiles"><span><small>Area</small><b>6.05 ha</b></span><span><small>Slope</small><b>10.7%</b></span><span><small>Faces</small><b>East</b></span><span><small>Sun</small><b>2,409 h</b></span></span><span class="ta-geo"><i style="flex:68;background:#e6c48a"></i><i style="flex:21;background:#e8994b"></i><i style="flex:11;background:#9b6b4f"></i></span><small class="ta-cap">Geology: the rocks under the plot, by share</small></span>',
+  shade:'<span class="ta ta-shade"><span class="ta-modes"><span><i style="background:linear-gradient(90deg,#e3b23c,#5f97d6,#7b4051)"></i>Appellations</span><span><i style="background:linear-gradient(90deg,#f3e3b3,#a8452c)"></i>Slope</span><span><i style="background:conic-gradient(#5f97d6,#e3b23c,#c0532d,#5f97d6)"></i>Aspect</span><span><i style="background:linear-gradient(90deg,#f6e6a9,#d9822b)"></i>Sun hours</span><span class="is-on"><i style="background:linear-gradient(90deg,#e6c48a,#e8994b,#e6ef7a,#9b6b4f)"></i>Geology</span></span><span class="ta-legend"><span><i style="background:#e6c48a"></i>Limestone</span><span><i style="background:#e8994b"></i>Marl</span><span><i style="background:#e6ef7a"></i>Colluvium</span><span><i style="background:#d8d2c4"></i>Scree</span></span></span>',
+  start:`<span class="ta ta-flow"><span class="ta-pill">${CMP_ICON}Compare</span><span class="ta-arrow">→</span><span class="ta-chips"><span class="ta-chip ta-a"><b>A</b>Chambertin</span><span class="ta-chip ta-b ta-empty"><b>B</b>Search a cru…</span></span></span>`,
+  read:'<span class="ta ta-read"><span class="ta-tabs"><span class="is-on">Parcels</span><span>Geology</span><span>Overlay</span></span><span class="ta-thumbs"><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#f6efe1"/><path d="M8 30C18 26 30 14 52 10M6 36C20 32 34 22 56 18" fill="none" stroke="#c9a77a" stroke-width=".8"/><path d="M22 8l12-2 3 26-13 2z" fill="#7f77dd44" stroke="#534ab7" stroke-width="1.4"/><path d="M24 14h11M24 20h12M25 26h11" stroke="#534ab7" stroke-width=".5"/></svg><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#e6ef7a"/><path d="M0 0h60v12C40 16 20 10 0 16z" fill="#e8994b"/><path d="M0 0h60v5C40 8 20 4 0 8z" fill="#9b6b4f"/><path d="M24 10l12-3 3 26-13 2z" fill="none" stroke="#fffdf7" stroke-width="3"/><path d="M24 10l12-3 3 26-13 2z" fill="none" stroke="#0f6e56" stroke-width="1.4"/></svg><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#fffdf7"/><path d="M14 12h30l2 18H12z" fill="#7f77dd33" stroke="#534ab7" stroke-width="1.3"/><path d="M8 18l40-5 4 9-42 6z" fill="#1d9e7533" stroke="#0f6e56" stroke-width="1.3"/></svg></span><span class="ta-prof"><svg viewBox="0 0 200 54"><path d="M4 8C40 12 90 20 150 30" fill="none" stroke="#534ab7" stroke-width="2.2"/><path d="M4 22C40 24 80 28 120 34" fill="none" stroke="#0f6e56" stroke-width="2.2"/><rect x="4" y="42" width="146" height="4" fill="#e6ef7a"/><rect x="4" y="48" width="80" height="4" fill="#d8d2c4"/><rect x="84" y="48" width="36" height="4" fill="#82bdf6"/></svg><small class="ta-cap">Down the slope: top to bottom, with the rock underneath</small></span></span>'};
+ const steps=()=>[
+  {target:pick('.topbar .top-search','.phone-chrome .top-search'),title:'Search',text:pick('Find a village or cru. The box beside it searches owners (domaines, GFA, SCI…) and lists the crus they hold.','Find a village or cru. Tap the person icon to search owners instead, and ☰ for the navigator and menu.')},
+  {target:'#terrain-canvas',pad:-70,title:'Moving the map',html:pick(art.mouse,art.touch)+pick('The arrow keys move the map too.','')},
+  {target:pick('#terrain-canvas','.phone-fab[data-fab=info]'),pad:pick(-70,6),title:pick('Click a vineyard','Tap a vineyard'),html:`${pick('Click','Tap')} any lieu-dit or AOC area${pick('',', then ⓘ,')} for its area, elevation, slope, which way it faces, sun hours and the rock beneath.${art.panel}Turn on <b>Cadastral parcels</b> in Layers to open single parcels and see their recorded owners.`},
+  {target:'.terroir-control',title:'Shade by geology',sheet:true,html:`<b>Shade by</b> colours the vineyards by slope, aspect, sun hours or <b>geology</b> instead of appellation.${art.shade}Geology lays the BRGM 1:50,000 map over the slopes, with a legend of the rocks in view.`},
+  {target:'#layers-toggle',title:'Layers',sheet:true,text:'Lieux-dits, AOC and commune boundaries, cadastral parcels, buildings, roads, woodland and water. Each one switches on or off.'},
+  {target:'#simulate-button',title:'Sun and rain',text:'Watch the sun and shadows move over the hills for any date and hour, or see how a storm’s rain runs off the slopes.'},
+  {target:pick('.detail-panel.drawer-open .compare-btn','.detail-panel.mobile-open .compare-btn'),title:'Compare two crus',html:`Open a cru or lieu-dit and press <b>Compare</b> (a parcel’s panel has it too). Then search for the second one, or ${pick('click','tap')} it on the map: it can be anywhere in the region.${art.start}<b>×</b> on a name, or a double-${pick('click','tap')}, picks a different one.`},
+  {target:null,title:'Reading a comparison',html:`Switch the two small maps between <b>Parcels</b> (contours and parcels), <b>Geology</b> (the rock map) and <b>Overlay</b> (one laid on the other, downhill pointing down).${art.read}<b>Show both</b> outlines them on the 3D map. <b>Save image</b> keeps the whole comparison as one picture.`},
+  {target:pick('.viewer-toolbar .toolbar-actions, .viewer-toolbar .share-link-btn, #share-button','.phone-fab[data-fab=save]'),title:'Share and save',text:pick('Copy link: the address keeps the view, the selection, the shading and any comparison, so it opens the same map for someone else. Save image downloads the map as you see it.','Save the map as an image. Share in any panel sends a link that opens the same view, selection, shading and comparison.')},
+  {target:pick('#keyboard-help','.phone-chrome .top-search'),title:'That’s it',all:true,text:pick('Run this tour again from How to use, down here. All features lists everything, with the mouse and keyboard controls.','Run this tour again from ☰ menu → How to use. All features lists everything, with the touch gestures.')}];
+ let layer=null,i=0,list=[],openedSheet=false;
+ const closeSheet=()=>{if(openedSheet&&document.documentElement.classList.contains('phone-view-open'))document.querySelector('.phone-fab[data-fab=view]')?.click();openedSheet=false;};
+ const finish=()=>{closeSheet();layer?.remove();layer=null;document.removeEventListener('keydown',onKey,true);try{localStorage.setItem(KEY,'1');}catch{}};
+ const onKey=e=>{if(!layer)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish();}else if(e.key==='ArrowRight'||e.key==='Enter'){e.preventDefault();e.stopPropagation();next();}else if(e.key==='ArrowLeft'){e.preventDefault();e.stopPropagation();back();}};
+ const next=()=>{if(++i>=list.length)finish();else show();};
+ const back=()=>{if(i>0){i--;show();}};
+ const show=async()=>{const step=list[i],token=Symbol();layer.token=token;
+   if(step.sheet&&isPhone()){if(!document.documentElement.classList.contains('phone-view-open')){document.querySelector('.phone-fab[data-fab=view]')?.click();openedSheet=true;await new Promise(r=>setTimeout(r,320));}}else closeSheet();
+   if(!layer||layer.token!==token)return;
+   const el=step.target?visible(step.target):null,hole=layer.querySelector('.guide-hole'),card=layer.querySelector('.guide-card');
+   card.querySelector('.guide-step').textContent=`${i+1} of ${list.length}`;card.querySelector('h3').textContent=step.title;const para=card.querySelector('.guide-body');if(step.html)para.innerHTML=step.html;else para.textContent=step.text;
+   card.querySelector('.guide-back').hidden=i===0;card.querySelector('.guide-skip').style.visibility=i===list.length-1?'hidden':'';card.querySelector('.guide-all').hidden=!step.all;card.querySelector('.guide-next').textContent=i===list.length-1?'Start exploring':'Next';
+   card.style.cssText='';card.classList.toggle('is-centred',!el);
+   if(!el){hole.style.cssText=`left:${innerWidth/2}px;top:${innerHeight/2}px;width:0;height:0`;return;}
    const r=el.getBoundingClientRect(),pad=step.pad??6,box={l:Math.max(4,r.left-pad),t:Math.max(4,r.top-pad),r:Math.min(innerWidth-4,r.right+pad),b:Math.min(innerHeight-4,r.bottom+pad)};
-   layer.querySelector('.guide-hole').style.cssText=`left:${box.l}px;top:${box.t}px;width:${box.r-box.l}px;height:${box.b-box.t}px`;
-   const card=layer.querySelector('.guide-card');card.querySelector('.guide-step').textContent=`${i+1} of ${steps.length}`;card.querySelector('h3').textContent=step.title;const para=card.querySelector('p');if(step.html)para.innerHTML=step.html;else para.textContent=step.text;card.querySelector('.guide-next').textContent=i===steps.length-1?'Start exploring':'Next';
-   const h=card.offsetHeight||170,below=box.b+12+h<innerHeight-8,above=box.t-12-h>8;card.style.top=below?`${box.b+12}px`:'';card.style.bottom=below?'':above?`${innerHeight-box.t+12}px`:`calc(16px + env(safe-area-inset-bottom))`;};
- const open=()=>{if(layer)return;i=0;layer=document.createElement('div');layer.className='phone-guide';layer.setAttribute('role','dialog');layer.setAttribute('aria-label','How to use the atlas');
-   layer.innerHTML='<div class="guide-hole"></div><div class="guide-card"><span class="guide-step"></span><h3></h3><p></p><div class="guide-actions"><button type="button" class="guide-skip">Skip</button><button type="button" class="guide-next">Next</button></div></div>';
-   document.body.append(layer);layer.querySelector('.guide-skip').addEventListener('click',finish);layer.querySelector('.guide-next').addEventListener('click',()=>{if(++i>=steps.length)finish();else show();});show();};
+   hole.style.cssText=`left:${box.l}px;top:${box.t}px;width:${box.r-box.l}px;height:${box.b-box.t}px`;
+   const h=card.offsetHeight||200,w=card.offsetWidth,below=box.b+12+h<innerHeight-8,above=box.t-12-h>8;
+   if(below)card.style.top=`${box.b+12}px`;else if(above)card.style.bottom=`${innerHeight-box.t+12}px`;else card.style.bottom='calc(16px + env(safe-area-inset-bottom))';
+   if(!isPhone()){const wide=box.r-box.l>w*1.4,x=wide?(box.l+box.r)/2-w/2:box.l;card.style.left=`${Math.max(16,Math.min(innerWidth-w-16,x))}px`;}};
+ const open=()=>{if(layer)return;i=0;list=steps();layer=document.createElement('div');layer.className='phone-guide tour';layer.setAttribute('role','dialog');layer.setAttribute('aria-label','How to use the atlas');
+   layer.innerHTML='<div class="guide-hole"></div><div class="guide-card"><span class="guide-step"></span><h3></h3><div class="guide-body"></div><div class="guide-actions"><button type="button" class="guide-skip">Skip</button><span class="guide-right"><button type="button" class="guide-all" hidden>All features</button><button type="button" class="guide-back">Back</button><button type="button" class="guide-next">Next</button></span></div></div>';
+   document.body.append(layer);layer.querySelector('.guide-skip').addEventListener('click',finish);layer.querySelector('.guide-next').addEventListener('click',next);layer.querySelector('.guide-back').addEventListener('click',back);
+   layer.querySelector('.guide-all').addEventListener('click',()=>{finish();window.atlasHelp?.open();});document.addEventListener('keydown',onKey,true);show();};
  window.atlasGuide={open};
- // "How to use" in the drawer's foot
+ // "How to use" in the phone drawer's foot
  const foot=document.querySelector('.sidebar-foot');if(foot){const b=document.createElement('button');b.type='button';b.className='phone-guide-link';b.textContent='How to use';b.addEventListener('click',()=>{document.querySelector('.sidebar')?.classList.remove('is-open');setTimeout(open,250);});foot.append(b);}
  let seen=false;try{seen=localStorage.getItem(KEY)==='1';}catch{}
- if(!seen){const wait=()=>{if(!document.documentElement.classList.contains('phone-ui'))return;if(!document.querySelector('#loading')?.hidden){setTimeout(wait,400);return;}setTimeout(open,900);};wait();}}
+ if(!seen){const wait=()=>{if(!document.querySelector('#loading')?.hidden||!document.querySelector('#terrain-canvas')){setTimeout(wait,400);return;}setTimeout(open,900);};wait();}}
 // Phones: while the menu drawer is open, a scrim covers the map. The first tap (or a swipe) outside the drawer closes
 // it and does nothing else, so it can't select a cru by accident; swiping the drawer left closes it too.
 {const shell=document.querySelector('.atlas-shell'),sidebar=document.querySelector('.sidebar');
@@ -621,8 +653,9 @@ const leftDrawer=drawer(sidebar,'left',`${term('village')} index`),rightDrawer=d
   const controls=document.querySelector('.viewer-bottom');if(controls&&typeof ResizeObserver==='function'){const syncControls=()=>document.documentElement.style.setProperty('--controls-height',`${Math.ceil(controls.getBoundingClientRect().height)}px`);new ResizeObserver(syncControls).observe(controls);syncControls();}
   updateInteractionHint();
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.querySelector('dialog[open]')){if(classificationPopover&&!classificationPopover.hidden)closeClassification({restoreFocus:true});window.atlasDrawers?.left?.closeNow();window.atlasDrawers?.right?.closeNow();$('.detail-panel').classList.remove('mobile-open','drawer-open');}});
-  const helpModal=$('#keyboard-help-popover'),helpButton=$('#keyboard-help');const closeHelp=()=>{if(helpModal.hidden)return;helpModal.hidden=true;helpButton?.focus();};
-  helpButton?.addEventListener('click',()=>{helpModal.hidden=false;$('#keyboard-help-close').focus();});$('#keyboard-help-close')?.addEventListener('click',closeHelp);
+  const helpModal=$('#keyboard-help-popover'),helpButton=$('#keyboard-help');renderHelp(helpModal);const closeHelp=()=>{if(helpModal.hidden)return;helpModal.hidden=true;helpButton?.focus();};
+  const openHelp=()=>{helpModal.hidden=false;$('#keyboard-help-close').focus();};window.atlasHelp={open:openHelp};
+  helpButton?.addEventListener('click',()=>window.atlasGuide?window.atlasGuide.open():openHelp());$('#keyboard-help-close')?.addEventListener('click',closeHelp);
   for(const modal of [helpModal,$('#source-modal')])modal?.addEventListener('click',event=>{if(event.target===modal){modal.hidden=true;}});
   window.addEventListener('keydown',e=>{if(e.key==='Escape')closeHelp();});
   document.querySelectorAll('[data-pan-direction]').forEach(button=>button.addEventListener('click',()=>panMap(button.dataset.panDirection)));
@@ -1081,6 +1114,20 @@ async function saveCompareImage(){if(!compare?.a||!compare?.b)return;const A=com
   const file=typeof File==='function'?new File([blob],name,{type:'image/png'}):null;
   if(document.documentElement.classList.contains('phone-ui')&&file&&navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:`${A.name} vs ${B.name}`});return;}catch(e){if(e?.name==='AbortError')return;}}
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+// "How to use": what the atlas can do (exploring, comparing, sharing) beside the mouse and keyboard controls.
+// Phones get the same dialog from "All features" in the menu, with touch gestures instead of keys.
+function renderHelp(modal){const card=modal?.querySelector('.keyboard-card');if(!card)return;const v=term('village'),phone=document.documentElement.classList.contains('phone-ui')||matchMedia('(pointer:coarse)').matches;
+  const tap=phone?'Tap':'Click',tapl=tap.toLowerCase(),row=(k,d)=>`<dt>${k}</dt><dd>${d}</dd>`;
+  const sections=[
+    ['Explore',[row(`${tap} a vineyard`,'Area, elevation, slope, which way it faces, hours of sun and the rock beneath'),row('Parcels',`Turn on Cadastral parcels in Layers, then ${tapl} one for its cru and recorded owners`),row('Shade by','Colour the vineyards by appellation, slope, aspect, sun hours or geology'),row('Sun &amp; rain','Sun and shadows for any date and hour, and how a storm runs off the slopes'),row('Search',`${v.charAt(0).toUpperCase()+v.slice(1)}s and crus, or owners (domaines, GFA, SCI…) and the crus they hold`)]],
+    ['Compare two crus',[row('Compare',`In a cru’s panel, or a parcel’s; then search or ${tapl} the second one, anywhere in the region`),row('Show both','Both outlined on the 3D map; when far apart, Show A / Show B jumps between them'),row('Parcels · Geology · Overlay','Same-scale maps; Overlay lays one on the other, each turned so downhill points down'),row('Down the slope','Elevation from the top of each cru to the bottom, with the rock underneath'),row('× on a name','Pick a different cru (or double-click the name)')]],
+    ['Share and save',[row('Copy link · Share','The address keeps the view, the selection, the shading and any comparison'),row('Save image','The map as you see it, or the comparison as one picture')]]];
+  const keys=phone?[row('One finger','Drag to move the map'),row('Two fingers','Pinch to zoom, twist to turn, slide up or down to tilt'),row('Tap','Select a vineyard or parcel'),row('Info sheet','Drag its handle up for everything, down for the map')]
+    :[row('<kbd>Left-drag</kbd>','Rotate the view (switch to Pan in the controls)'),row('<kbd>Shift</kbd> + drag','Pan across communes'),row('<kbd>Right-drag</kbd>','Rotate'),row('<kbd>Scroll</kbd>','Zoom'),row('<kbd>Double-click</kbd>','Focus the terrain under the cursor'),row('<kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd>','Move the map, relative to the screen'),row('<kbd>/</kbd>',`Search ${v}s and crus`),row('<kbd>Esc</kbd>','Close panels and dialogs')];
+  const close=card.querySelector('.modal-close');close?.setAttribute('aria-label','Close all features');
+  card.classList.add('help-card');
+  card.innerHTML='';if(close)card.append(close);
+  card.insertAdjacentHTML('beforeend',`<h2 id="keyboard-help-title">All features</h2><div class="help-cols"><div class="help-col">${sections.slice(0,2).map(([h,rows])=>`<section class="help-sec"><h3>${h}</h3><dl>${rows.join('')}</dl></section>`).join('')}</div><div class="help-col">${sections.slice(2).map(([h,rows])=>`<section class="help-sec"><h3>${h}</h3><dl>${rows.join('')}</dl></section>`).join('')}<section class="help-sec"><h3>${phone?'Touch':'Moving around'}</h3><dl class="help-keys">${keys.join('')}</dl></section><p class="modal-note">Boundaries are informative, not a legal survey. Sun hours are a clear-sky model for comparing places. Sources are listed under Sources and About.</p></div></div>`);}
 // ---- Shareable links ----
 // The address records what is on screen: #<village>?sel=<layer>:<feature id>&owner=<SIREN>&shade=<mode>&cam=<easting>,
 // <northing>,<distance m>,<heading°>,<tilt°>. It is rewritten quietly (no history entry) as you move, select or open a
