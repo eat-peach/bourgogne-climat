@@ -800,7 +800,7 @@ function slopeFacing(dir,terroir){if(!terroir||!Number.isFinite(terroir.aspectDe
 // Sun & rain is hidden while comparing (its bar would sit under the panel); an open simulation is closed first.
 function closeSunAndRain(){const bar=document.querySelector('.sim-bar');if(bar&&!bar.hidden)bar.querySelector('.sim-close')?.click();}
 async function flyToSide(side){if(!side?.feature||!compare)return;compare.viewing=side===compare.b?'b':'a';compare.flying=true;try{const v=index.villages.find(x=>x.id===side.villageId);if(v&&selected?.id!==v.id&&!renderer?.featureIndex?.some(it=>it.key===side.layer&&String(fprops(it.feature).id)===String(side.id)))await selectVillage(v);await renderer?.whenSceneReady?.();const item=await waitForFeature(side.layer,side.id,8000);if(item){renderer.selectFeature(item.feature,side.layer);await showBestView(item.feature,side.layer,side.terroir);}}finally{if(compare){compare.flying=false;renderCompare();openInfoPanel(side.feature);}}}
-function addCompareButton(host,feature,layer,provenance){if(!host||compare||(layer!=='climats'&&layer!=='parcels')||host.querySelector('.compare-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn compare-btn';b.title='Compare this with another lieu-dit or cru';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M16 4v16M4 8h4M16 16h4"/></svg><span class="share-label">Compare</span>';b.addEventListener('click',e=>{e.stopPropagation();startCompare(feature,layer,provenance);});(host.querySelector('.fact-heading')||host).append(b);}
+function addCompareButton(host,feature,layer,provenance){if(!host||compare||(layer!=='climats'&&layer!=='parcels')||host.querySelector('.compare-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn compare-btn';b.title='Compare this with another lieu-dit or cru';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M16 4v16M4 8h4M16 16h4"/></svg><span class="share-label">Compare</span>';b.addEventListener('click',e=>{e.stopPropagation();startCompare(feature,layer,provenance);});factActions(host).append(b);}
 const haText=m2=>m2==null||!Number.isFinite(Number(m2))?'—':`${(Number(m2)/10000).toLocaleString('en',{maximumFractionDigits:Number(m2)>=100000?1:2})} ha`;
 function compareRow(label,a,b){return `<div class="cmp-row"><span class="cmp-k">${label}</span><div class="cmp-v cmp-va">${a}</div><div class="cmp-v cmp-vb">${b}</div></div>`;}
 function cmpBar(v,max,k){return Number.isFinite(v)&&max>0?`<i class="cmp-bar"><b class="cmp-fill-${k}" style="width:${Math.max(4,Math.round(v/max*100))}%"></b></i>`:'';}
@@ -820,7 +820,7 @@ function renderCompare(){const card=$('#feature-card');if(!card||!compare)return
     const slope=t=>t?`<strong>${t.slopePct.toLocaleString('en',{maximumFractionDigits:1})}%</strong><span class="cmp-s">steepest ${Math.round(t.slopeMaxPct)}%</span>`:'<span class="cmp-s">—</span>';
     const faces=t=>t?`<strong class="cmp-face">${compassIcon(t.aspectDeg)}${esc(ASPECT_WORDS[t.aspect]||t.aspect)}</strong><span class="cmp-s">${t.aspectDeg}°</span>`:'<span class="cmp-s">—</span>';
     const sun=(t,k)=>t?`<strong>${t.sunHours.toLocaleString('en')} h</strong>${cmpBar(t.sunHours,maxS,k)}`:'<span class="cmp-s">—</span>';
-    html+=compare.shapes?.key===compareKey()?compare.shapes.html:compareShapes(A,B);
+    html+=compare.shapes?.key===compareKey()?compareFiguresHtml():compareShapes(A,B);
     html+=`<div class="cmp-grid">${compareRow('',`<span class="cmp-s">${esc(A.tier||'')}${A.village?` · ${esc(A.village)}`:''}</span>`,`<span class="cmp-s">${esc(B.tier||'')}${B.village?` · ${esc(B.village)}`:''}</span>`)}
       ${compareRow('Area',`<strong>${haText(A.area)}</strong>${cmpBar(A.area,maxA,'a')}`,`<strong>${haText(B.area)}</strong>${cmpBar(B.area,maxA,'b')}`)}
       ${compareRow('Elevation',elev(ta),elev(tb))}${compareRow('Slope',slope(ta),slope(tb))}${compareRow('Faces',faces(ta),faces(tb))}
@@ -833,7 +833,7 @@ function renderCompare(){const card=$('#feature-card');if(!card||!compare)return
   card.querySelector('.cmp-both-btn')?.addEventListener('click',()=>showBoth());
   card.querySelector('.cmp-swap')?.addEventListener('click',()=>{[compare.a,compare.b]=[compare.b,compare.a];compare.expanded={};renderCompare();scheduleShareSync();});
   card.querySelectorAll('.cmp-more').forEach(b=>b.addEventListener('click',()=>{compare.expanded[b.dataset.k]=!compare.expanded[b.dataset.k];renderCompare();}));
-  setupComparePicker(card);
+  setupComparePicker(card);bindCompareFigures(card);
   if(B&&!B.loading&&compare.shapes?.key!==compareKey())buildCompareMaps();
   const row=card.querySelector('.cmp-actions');if(row){addShareButton(row);addCompareSaveButton(row);row.querySelectorAll('.share-link-btn').forEach(b=>b.classList.add('cmp-act'));}}
 // B's own picker: type to search every grand and premier cru in the region (not limited by the region filter), or
@@ -903,23 +903,94 @@ async function buildCompareMaps(){const key=compareKey();if(!key||compare.buildi
       return {side,k:n?'b':'a',scenes,rings,b:b0,parcels,fine};}));
     if(compareKey()!==key)return;
     compare.geom=sides.map(v=>({rings:v.rings,b:v.b}));
-    const figures=renderCompareMaps(sides,cru);
-    const html=`<div class="cmp-shapes">${figures.join('')}<p class="cmp-shapes-note">Same scale, north up · lines: parcels · arrow: downhill</p></div>`;
-    compare.shapes={key,html};if(!compare.repick)renderCompare();else{const host=$('#feature-card .cmp-shapes');if(host)host.outerHTML=html;}
+    const fr=compareFrame(sides);await loadGeologyLegend();
+    await Promise.all(sides.map(async(v,n)=>{const w=fr.views[n];v.geoPolys=geologyLegendData?(await Promise.all(geologyTileKeys([w.vx0,w.vy0,w.vx1,w.vy1]).map(loadGeologyTile))).flat():[];}));
+    if(compareKey()!==key)return;
+    for(const v of sides){v.heightAt=sideHeight(v);v.samples=cruSamples(v);v.fall=fallLine(v);v.centroid=v.samples.length?[v.samples.reduce((a,q)=>a+q.x,0)/v.samples.length,v.samples.reduce((a,q)=>a+q.y,0)/v.samples.length]:[(v.b[0]+v.b[2])/2,(v.b[1]+v.b[3])/2];}
+    const figs={parcels:renderCompareMaps(sides,cru,fr).join(''),geology:sides.some(v=>v.geoPolys.length)?renderGeologyMaps(sides,fr).join(''):null,overlay:renderOverlay(sides)};
+    compare.shapes={key,figs,legend:compareGeoLegend(compare.a,compare.b),profile:renderProfile(sides.map(slopeProfile))};
+    if(!compare.repick)renderCompare();else{const host=$('#feature-card .cmp-figures')||$('#feature-card .cmp-shapes');if(host){host.outerHTML=compareFiguresHtml();bindCompareFigures($('#feature-card'));}}
   }catch(e){debug.resourceErrors.push(`compare map: ${e.message}`);}finally{if(compare&&compare.building===key)compare.building=null;}}
+// Both small maps share one scale; each is centred on its cru.
+function compareFrame(sides){const W=260,H=200,PAD=24,scale=Math.min(...sides.map(v=>Math.min((W-PAD*2)/Math.max(v.b[2]-v.b[0],1),(H-PAD*2-12)/Math.max(v.b[3]-v.b[1],1))));
+  return {W,H,scale,views:sides.map(v=>{const cx=(v.b[0]+v.b[2])/2,cy=(v.b[1]+v.b[3])/2;return {cx,cy,vx0:cx-W/2/scale,vx1:cx+W/2/scale,vy1:cy+(H-12)/2/scale,vy0:cy-(H+12)/2/scale};})};}
+// Height at a point: the 5 m cru tile, blended into the village terrain near its edge.
+function sideHeight(v){const coarseAt=(x,y)=>{for(const sc of v.scenes){const h=sampleScene(sc,x,y);if(h!=null)return h;}return null;};
+  const heightAt=(x,y)=>{const f=v.fine?.at(x,y);if(f!=null){const k=v.fine.edge(x,y);if(k>=1)return f;const c=coarseAt(x,y);return c==null?f:c+(f-c)*k;}return coarseAt(x,y);};return heightAt;}
+// The cru's overall downhill direction: a plane fitted through its sample heights. Unlike the mean of local aspects,
+// it follows the whole slope (a long strip like Montrachet turns square to the page). Falls back to the aspect.
+function fallLine(v){const s=(v.samples||[]).filter(q=>q.z!=null&&Number.isFinite(q.z)),t=v.side.terroir,aspect=t&&Number.isFinite(t.aspectDeg)&&t.slopePct>=2?t.aspectDeg:null;if(s.length<8)return aspect;
+  const n=s.length,mx=s.reduce((a,q)=>a+q.x,0)/n,my=s.reduce((a,q)=>a+q.y,0)/n,mz=s.reduce((a,q)=>a+q.z,0)/n;let sxx=0,sxy=0,syy=0,sxz=0,syz=0;for(const q of s){const x=q.x-mx,y=q.y-my,z=q.z-mz;sxx+=x*x;sxy+=x*y;syy+=y*y;sxz+=x*z;syz+=y*z;}
+  const det=sxx*syy-sxy*sxy;if(!(Math.abs(det)>1e-6))return aspect;const gx=(sxz*syy-syz*sxy)/det,gy=(syz*sxx-sxz*sxy)/det;if(Math.hypot(gx,gy)<.015)return aspect;/* under 1.5%: too flat to say */
+  return (Math.atan2(-gx,-gy)*180/Math.PI+360)%360;}
+// Points on a grid inside the cru, each with its height and the BRGM unit under it (the profile and the overlay use them).
+function cruSamples(v){const b=v.b,span=Math.max(b[2]-b[0],b[3]-b[1]),step=Math.max(4,span/56),flat=v.rings.map(r=>r.flatMap(q=>[Number(q[0]),Number(q[1])])),polys=(v.geoPolys||[]).filter(q=>!(q.bbox[2]<b[0]||q.bbox[0]>b[2]||q.bbox[3]<b[1]||q.bbox[1]>b[3])),out=[];
+  for(let x=b[0]+step/2;x<b[2];x+=step)for(let y=b[1]+step/2;y<b[3];y+=step){if(!insideRings(flat,x,y))continue;let unit=null;for(const q of polys){if(x<q.bbox[0]||x>q.bbox[2]||y<q.bbox[1]||y>q.bbox[3])continue;if(insideRings(q.rings,x,y))unit=q.unit;}out.push({x,y,z:v.heightAt(x,y),unit});}
+  return out;}
+const cmpNorth=W=>`<g class="cmp-shape-north" transform="translate(${W-14} 16)"><path d="M0 7V-6M0-8l-3.5 5M0-8l3.5 5"/><text y="17" text-anchor="middle">N</text></g>`;
+const cmpScaleBar=(H,bar,barPx)=>`<g class="cmp-shape-scale" transform="translate(10 ${H-9})"><path d="M0 0H${barPx.toFixed(1)}M0-3V3M${barPx.toFixed(1)}-3V3"/><text x="${(barPx+6).toFixed(1)}" y="3.5">${bar>=1000?`${bar/1000} km`:`${bar} m`}</text></g>`;
+function cmpArrow(ax,ay,t,size){if(!t||!Number.isFinite(t.aspectDeg)||!(t.slopePct>=2))return '';const a=t.aspectDeg*Math.PI/180,len=Math.min(36,Math.max(18,size*.4)),dx=Math.sin(a)*len,dy=-Math.cos(a)*len,hx=ax+dx/2,hy=ay+dy/2,ang=Math.atan2(dy,dx);
+  return `<path class="cmp-shape-arrow" d="M${(ax-dx/2).toFixed(1)} ${(ay-dy/2).toFixed(1)}L${hx.toFixed(1)} ${hy.toFixed(1)}M${hx.toFixed(1)} ${hy.toFixed(1)}l${(-7*Math.cos(ang-.5)).toFixed(1)} ${(-7*Math.sin(ang-.5)).toFixed(1)}M${hx.toFixed(1)} ${hy.toFixed(1)}l${(-7*Math.cos(ang+.5)).toFixed(1)} ${(-7*Math.sin(ang+.5)).toFixed(1)}"/>`;}
+// The same two frames coloured by the BRGM 1:50,000 geological map, with each cru outlined on top.
+function renderGeologyMaps(sides,fr){const {W,H,scale}=fr,bar=niceLength((W*.3)/scale),barPx=bar*scale;
+  return sides.map((v,n)=>{const {cx,cy,vx0,vx1,vy0,vy1}=fr.views[n],X=x=>(x-vx0)*scale,Y=y=>(vy1-y)*scale;
+    const flatPath=f=>{let d='',lx=NaN,ly=NaN;for(let i=0;i<f.length;i+=2){const x=X(f[i]),y=Y(f[i+1]);if(i&&i<f.length-2&&Math.abs(x-lx)<.7&&Math.abs(y-ly)<.7)continue;d+=`${d?'L':'M'}${x.toFixed(1)} ${y.toFixed(1)}`;lx=x;ly=y;}return d?d+'Z':'';};/* points closer than a pixel are dropped */
+    const units=v.geoPolys.filter(q=>q.bbox[2]>=vx0&&q.bbox[0]<=vx1&&q.bbox[3]>=vy0&&q.bbox[1]<=vy1).map(q=>`<path d="${q.rings.map(flatPath).join('')}" fill="${esc(q.colour)}" stroke="${esc(q.colour)}" fill-rule="evenodd"/>`).join('');
+    const path=rings=>rings.map(r=>r.map(([x,y],k)=>`${k?'L':'M'}${X(x).toFixed(1)} ${Y(y).toFixed(1)}`).join('')+'Z').join(''),seen=new Set(),lieux=[];
+    for(const f of v.scenes.flatMap(sc=>sc.climats||[])){const q=fprops(f);if(seen.has(q.id))continue;seen.add(q.id);const rings=outlineRings(f),b=ringsBounds(rings);if(b[2]>=vx0&&b[0]<=vx1&&b[3]>=vy0&&b[1]<=vy1)lieux.push(path(rings));}
+    const shape=path(v.rings);
+    return `<svg class="cmp-shape cmp-shape-${v.k} cmp-geo-map" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(v.side.name)} on the geological map at the shared scale"><g class="cmp-geo-units">${units}</g><path class="cmp-map-lieux" d="${lieux.join('')}"/><path class="cmp-shape-halo" d="${shape}"/><path class="cmp-shape-line" d="${shape}" fill-rule="evenodd"/>${cmpArrow(X(cx),Y(cy),v.side.terroir,Math.min(v.b[2]-v.b[0],v.b[3]-v.b[1])*scale)}${cmpNorth(W)}${cmpScaleBar(H,bar,barPx)}</svg>`;});}
+// The rock units inside A or B, largest first: the geology map's legend.
+function compareGeoList(A,B){const L=geologyLegendData;if(!L)return[];const tot=new Map();for(const side of [A,B])for(const [u,pc] of side?.geo||[]){const unit=L.units[u];if(!unit)continue;const name=geologyName(unit).split(',')[0],e=tot.get(name)||{name,colour:unit.colour,pc:0};e.pc+=pc;tot.set(name,e);}return [...tot.values()].sort((a,b)=>b.pc-a.pc).slice(0,6);}
+function compareGeoLegend(A,B){const list=compareGeoList(A,B);return list.length?`<ul class="cmp-geo-legend">${list.map(e=>`<li><i style="background:${esc(e.colour)}"></i>${esc(e.name)}</li>`).join('')}</ul>`:'';}
+// A and B laid over each other on one drawing: same scale, centred on each other, each turned so its downhill
+// direction points down the page (uphill at the top), so width, length down the slope and shape compare directly.
+function renderOverlay(sides){const W=520,H=240,PAD=30,COL={a:'#534ab7',b:'#0f6e56'};
+  const prep=sides.map(v=>{const turn=Number.isFinite(v.fall)?(180-v.fall)*Math.PI/180:0,[ox,oy]=v.centroid,cs=Math.cos(turn),sn=Math.sin(turn);
+    const rings=v.rings.map(r=>r.map(([x,y])=>{const dx=x-ox,dy=y-oy;return [dx*cs+dy*sn,-dx*sn+dy*cs];}));return {v,rings,b:ringsBounds(rings),turned:!!turn};});/* clockwise turn; world y = north */
+  const x0=Math.min(...prep.map(q=>q.b[0])),y0=Math.min(...prep.map(q=>q.b[1])),x1=Math.max(...prep.map(q=>q.b[2])),y1=Math.max(...prep.map(q=>q.b[3]));
+  const scale=Math.min((W-PAD*2-40)/Math.max(x1-x0,1),(H-PAD*2)/Math.max(y1-y0,1)),mx=(x0+x1)/2,my=(y0+y1)/2,X=x=>W/2+(x-mx)*scale,Y=y=>H/2-(y-my)*scale;
+  const path=rings=>rings.map(r=>r.map(([x,y],k)=>`${k?'L':'M'}${X(x).toFixed(1)} ${Y(y).toFixed(1)}`).join('')+'Z').join('');
+  const bar=niceLength((W*.16)/scale),barPx=bar*scale,turned=prep.some(q=>q.turned);
+  const key=prep.map((q,i)=>`<g transform="translate(12 ${16+i*16})"><rect y="-8" width="10" height="10" rx="2" class="cmp-ov-${q.v.k}"/><text class="cmp-ov-key" x="16" y="1" fill="${COL[q.v.k]}">${q.v.k.toUpperCase()} · ${esc(q.v.side.name)}</text></g>`).join('');
+  const dir=turned?`<g class="cmp-ov-dir" transform="translate(${W-22} ${H/2})"><path d="M0 34V-34M0-36l-4 7M0-36l4 7"/><text transform="rotate(-90)" x="0" y="-8" text-anchor="middle">uphill</text></g>`:cmpNorth(W);
+  return `<svg class="cmp-shape cmp-overlay" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(prep.map(q=>q.v.side.name).join(' and '))} laid over each other at one scale">${prep.map(q=>`<path class="cmp-ov-${q.v.k}" d="${path(q.rings)}" fill-rule="evenodd"/>`).join('')}${key}${dir}${cmpScaleBar(H,bar,barPx)}</svg>`;}
+// Down the slope: the cru's sample points binned by how far downhill they lie (along its aspect), each bin's average
+// height and most common rock. Distance starts at the cru's top edge.
+function slopeProfile(v){const s=(v.samples||[]).filter(q=>q.z!=null&&Number.isFinite(q.z));if(s.length<8)return null;const a=(Number.isFinite(v.fall)?v.fall:180)*Math.PI/180,dx=Math.sin(a),dy=Math.cos(a);
+  const pr=s.map(q=>q.x*dx+q.y*dy);let lo=Infinity,hi=-Infinity;for(const x of pr){if(x<lo)lo=x;if(x>hi)hi=x;}const len=hi-lo;if(len<20)return null;
+  const n=Math.max(8,Math.min(48,Math.round(len/12))),bins=Array.from({length:n},()=>({z:0,c:0,units:new Map()}));
+  s.forEach((q,i)=>{const bn=bins[Math.min(n-1,Math.floor((pr[i]-lo)/len*n))];bn.z+=q.z;bn.c++;if(q.unit!=null)bn.units.set(q.unit,(bn.units.get(q.unit)||0)+1);});
+  const pts=bins.map((bn,k)=>bn.c>=3?{d:(k+.5)/n*len,z:bn.z/bn.c,unit:[...bn.units].sort((x,y)=>y[1]-x[1])[0]?.[0]??null}:null).filter(Boolean);/* edge bins with almost no points are left out */
+  return pts.length>=3?{len,pts}:null;}
+function renderProfile(profs){if(!profs.length||profs.some(q=>!q))return '';const L=geologyLegendData,W=520,H=228,PL=44,PR=16,PT=38,PB=66,pw=W-PL-PR,ph=H-PT-PB,keys=['a','b'];
+  const maxLen=Math.max(...profs.map(q=>q.len));let zl=Infinity,zh=-Infinity;for(const q of profs)for(const r of q.pts){if(r.z<zl)zl=r.z;if(r.z>zh)zh=r.z;}
+  const zstep=[2,5,10,20,25,50,100].find(x=>(zh-zl)/x<=5)||100;zl=Math.floor(zl/zstep)*zstep;zh=Math.ceil(zh/zstep)*zstep;if(zh<=zl)zh=zl+zstep;
+  const X=d=>PL+d/maxLen*pw,Y=z=>PT+(zh-z)/(zh-zl)*ph;let grid='',ax='';
+  for(let z=zl;z<=zh+1e-6;z+=zstep){grid+=`M${PL} ${Y(z).toFixed(1)}H${W-PR}`;ax+=`<text x="${PL-6}" y="${(Y(z)+3).toFixed(1)}" text-anchor="end">${z} m</text>`;}
+  const dstep=[25,50,100,200,250,500,1000].find(x=>maxLen/x<=5)||1000;for(let d=0;d<=maxLen+1e-6;d+=dstep)ax+=`<text x="${X(d).toFixed(1)}" y="${PT+ph+13}" text-anchor="middle">${d===0?'0':d>=1000?`${d/1000} km`:`${d} m`}</text>`;
+  const lines=profs.map((q,i)=>`<path class="cmp-prof-line cmp-prof-${keys[i]}" d="${q.pts.map((r,j)=>`${j?'L':'M'}${X(r.d).toFixed(1)} ${Y(r.z).toFixed(1)}`).join('')}"/>`).join('');
+  const bands=profs.map((q,i)=>{const y=PT+ph+22+i*13;let out=`<text class="cmp-prof-tag cmp-prof-tag-${keys[i]}" x="${PL-6}" y="${y+8}" text-anchor="end">${keys[i].toUpperCase()}</text>`;
+    q.pts.forEach((r,j)=>{const a=j?(q.pts[j-1].d+r.d)/2:r.d-q.len/q.pts.length/2,b=j<q.pts.length-1?(r.d+q.pts[j+1].d)/2:r.d+q.len/q.pts.length/2,c=r.unit!=null&&L?.units?.[r.unit]?.colour||'#e4dccd';out+=`<rect x="${X(Math.max(0,a)).toFixed(1)}" y="${y}" width="${(X(Math.min(q.len,b))-X(Math.max(0,a))+.4).toFixed(1)}" height="9" fill="${esc(c)}"/>`;});return out;}).join('');
+  const key=profs.map((q,i)=>{const f=q.pts[0],l=q.pts[q.pts.length-1];return `<text class="cmp-prof-key cmp-prof-tag-${keys[i]}" x="${PL}" y="${15+i*15}">${keys[i].toUpperCase()} · ${Math.round(f.z)} m down to ${Math.round(l.z)} m over ${Math.round(l.d-f.d)} m</text>`;}).join('');
+  return `<section class="cmp-profile"><h4>Down the slope</h4><svg class="cmp-profile-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Elevation down the slope of A and B, with the rock underneath">${key}<path class="cmp-prof-grid" d="${grid}"/><g class="cmp-prof-axis">${ax}</g>${lines}${bands}<text class="cmp-prof-axis-label" x="${PL}" y="${H-6}">Distance downhill from the top edge of each cru</text></svg><p class="cmp-shapes-note">Elevation averaged across each cru · bands: the rock underneath (BRGM)</p></section>`;}
+const CMP_VIEWS=[['parcels','Parcels'],['geology','Geology'],['overlay','Overlay']];
+const CMP_NOTES={parcels:'Same scale, north up · lines: parcels · arrow: downhill',geology:'Same scale, north up · BRGM geological map, 1:50,000',overlay:'Same scale, centred on each other, turned so downhill points down'};
+function compareFiguresHtml(){const f=compare.shapes,view=f.figs[compare.mapView]?compare.mapView:'parcels';
+  return `<div class="cmp-figures"><div class="cmp-view-tabs" role="tablist" aria-label="Map style">${CMP_VIEWS.filter(([k])=>f.figs[k]).map(([k,l])=>`<button type="button" role="tab" data-view="${k}" aria-selected="${k===view}">${l}</button>`).join('')}</div><div class="cmp-shapes${view==='overlay'?' is-overlay':''}">${f.figs[view]}<p class="cmp-shapes-note">${CMP_NOTES[view]}</p>${view==='geology'?f.legend:''}</div>${f.profile}</div>`;}
+function bindCompareFigures(root){root?.querySelectorAll('.cmp-view-tabs [data-view]').forEach(b=>b.addEventListener('click',()=>{if(!compare)return;compare.mapView=b.dataset.view;const host=$('#feature-card .cmp-figures');if(host){host.outerHTML=compareFiguresHtml();bindCompareFigures($('#feature-card'));}}));}
 // Each cru on a small north-up map at one shared scale: surrounding AOC areas tinted by class with a few names, the
 // lieux-dits, contours from the terrain (5 m tiles around grand and premier crus, the village terrain elsewhere), the
 // cadastral parcels inside the cru, a scale bar and the downhill arrow. Flat on purpose: a 3D angle foreshortens shape
 // and area, which a side-by-side comparison has to show truthfully; the real 3D is one click away ("Show both").
-function renderCompareMaps(sides,cru){
-  const W=260,H=200,PAD=24,scale=Math.min(...sides.map(v=>Math.min((W-PAD*2)/Math.max(v.b[2]-v.b[0],1),(H-PAD*2-12)/Math.max(v.b[3]-v.b[1],1))));
+function renderCompareMaps(sides,cru,fr){
+  const {W,H,scale}=fr;
   const bar=niceLength((W*.3)/scale),barPx=bar*scale,NX=88,NY=68;
-  return sides.map(v=>{
-    const cx=(v.b[0]+v.b[2])/2,cy=(v.b[1]+v.b[3])/2,vx0=cx-W/2/scale,vx1=cx+W/2/scale,vy1=cy+(H-12)/2/scale,vy0=cy-(H+12)/2/scale;
+  return sides.map((v,n)=>{
+    const {cx,cy,vx0,vx1,vy0,vy1}=fr.views[n];
     const X=x=>(x-vx0)*scale,Y=y=>(vy1-y)*scale,path=rings=>rings.map(r=>r.map(([x,y],k)=>`${k?'L':'M'}${X(x).toFixed(1)} ${Y(y).toFixed(1)}`).join('')+'Z').join('');
     const inView=b=>b&&b[2]>=vx0&&b[0]<=vx1&&b[3]>=vy0&&b[1]<=vy1;
-    const coarseAt=(x,y)=>{for(const sc of v.scenes){const h=sampleScene(sc,x,y);if(h!=null)return h;}return null;};
-    const heightAt=(x,y)=>{const f=v.fine?.at(x,y);if(f!=null){const k=v.fine.edge(x,y);if(k>=1)return f;const c=coarseAt(x,y);return c==null?f:c+(f-c)*k;}return coarseAt(x,y);};
+    const heightAt=v.heightAt;
     const own=String(v.side.id),seen=new Set(),aoc=[],lieux=[],names=[];
     for(const f of v.scenes.flatMap(sc=>sc.parcels||[])){const q=fprops(f);if(seen.has(`p:${q.id}`))continue;seen.add(`p:${q.id}`);if(String(q.id)===own&&v.side.layer==='parcels')continue;const rings=outlineRings(f),b=ringsBounds(rings);if(!inView(b))continue;const c=cru.get(String(q.id));aoc.push(`<path d="${path(rings)}" fill="${c?NAV_CLASS[c.class]||'#b9a98f':'#c9bda6'}" fill-opacity="${c?.3:.14}" fill-rule="evenodd"/>`);if(c&&(c.class==='grand-cru'||c.class==='premier-cru'))names.push({name:c.name,x:X((b[0]+b[2])/2),y:Y((b[1]+b[3])/2),area:(b[2]-b[0])*(b[3]-b[1])});}
     for(const f of v.scenes.flatMap(sc=>sc.climats||[])){const q=fprops(f);if(seen.has(`c:${q.id}`))continue;seen.add(`c:${q.id}`);if(String(q.id)===own&&v.side.layer==='climats')continue;const rings=outlineRings(f);if(inView(ringsBounds(rings)))lieux.push(path(rings));}
@@ -947,7 +1018,7 @@ async function showBoth(){if(!compare?.a||!compare?.b)return;if(!compare.geom){a
   if(renderer.restoreView({...view,easting:(x0+x1)/2,northing:(y0+y1)/2,radiusMetres:Math.max(600,Math.min(6000,Math.max(x1-x0,y1-y0)*1.9))}))renderer.scheduleViewChange?.();centreInVisible();}
 function addParcelCompareButton(host,prov){if(!host||compare||host.querySelector('.compare-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn compare-btn';b.title='Compare the cru this parcel lies in with another';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M16 4v16M4 8h4M16 16h4"/></svg><span class="share-label">Compare</span>';
   b.addEventListener('click',async e=>{e.stopPropagation();await loadCruIndex();const cru=cruUnderParcel(prov);if(cru)startCompare(cru.feature,cru.layer,{});else{const l=b.querySelector('.share-label');l.textContent='No cru here';setTimeout(()=>{l.textContent='Compare';},1800);}});
-  (host.querySelector('.fact-heading')||host).append(b);}
+  factActions(host).append(b);}
 function addCompareSaveButton(host){if(!host||host.querySelector('.cmp-save-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn cmp-save-btn';b.title='Save this comparison as an image';b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg><span class="share-label">Save image</span>';
   b.addEventListener('click',async e=>{e.stopPropagation();const l=b.querySelector('.share-label');b.disabled=true;l.textContent='Preparing…';try{await saveCompareImage();l.textContent='Saved';}catch(err){l.textContent='Could not save';debug.resourceErrors.push(`compare image: ${err.message}`);}finally{b.disabled=false;setTimeout(()=>{l.textContent='Save image';},1800);}});
   const share=host.querySelector('.share-link-btn');if(share)share.after(b);else host.append(b);}
@@ -960,7 +1031,7 @@ function svgToImage(svg){const clone=svg.cloneNode(true),src=[svg,...svg.querySe
   const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
   return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);res(img);};img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('map drawing failed'));};img.src=url;});}
 async function saveCompareImage(){if(!compare?.a||!compare?.b)return;const A=compare.a,B=compare.b,S=2,W=1080,M=44,LBL=150,GAP=24,col=(W-M*2-LBL-GAP)/2,x1=M+LBL,x2=x1+col+GAP;
-  const svgs=[...document.querySelectorAll('#feature-card .cmp-shapes svg.cmp-shape')],maps=await Promise.all(svgs.map(svgToImage));
+  const svgs=[...document.querySelectorAll('#feature-card .cmp-shapes svg.cmp-shape')],maps=await Promise.all(svgs.map(svgToImage)),profSvg=document.querySelector('#feature-card .cmp-profile-svg'),prof=profSvg?await svgToImage(profSvg):null,view=compare.shapes?.figs?.[compare.mapView]?compare.mapView:'parcels',legendList=view==='geology'?compareGeoList(A,B):[];
   const serif='Georgia,"Source Serif 4",serif',sans='system-ui,-apple-system,"Segoe UI",sans-serif',ink='#28231f',muted='#7a7064',line='#e1d8c9',paper='#f4efe5',card='#fffdf7',wine='#7b4051';
   const COL={a:{fill:'#7f77dd',dark:'#3c3489'},b:{fill:'#1d9e75',dark:'#085041'}},L=geologyLegendData,ta=A.terroir,tb=B.terroir;
   // measure first: geology and owners can wrap
@@ -968,9 +1039,9 @@ async function saveCompareImage(){if(!compare?.a||!compare?.b)return;const A=com
   const geoText=x=>x.geo?.length&&L?x.geo.map(([u,pc])=>`${geologyName(L.units[u]).split(',')[0]} ${pc}%`).join(' · '):'Not mapped';
   const geoA=wrap(geoText(A),`13px ${sans}`,col),geoB=wrap(geoText(B),`13px ${sans}`,col);
   const owners=x=>x.owners?.entities?.length?x.owners.entities.slice(0,5):[],oa=owners(A),ob=owners(B),otherIds=x=>new Set((x.owners?.entities||[]).map(e=>e.o.siren||e.o.name));
-  const mapH=maps.length===2?Math.round(col*(maps[0].height/maps[0].width)):0;
+  const full=col*2+GAP,mapW=maps.length===1?full:col,mapH=maps.length?Math.round(mapW*(maps[0].height/maps[0].width)):0,profH=prof?Math.round(full*(prof.height/prof.width)):0;
   const rows=[{k:'Area',h:52},...(ta||tb?[{k:'Elevation',h:56},{k:'Slope',h:56},{k:'Faces',h:56},{k:'Direct sun',sub:'Apr–Sep',h:52}]:[]),{k:'Geology',h:30+Math.max(geoA.length,geoB.length)*18},{k:'Owners',sub:'legal entities',h:40+Math.max(oa.length,ob.length,1)*22}];
-  const top=M+92,chipsH=58,H=top+chipsH+18+(mapH?mapH+34:0)+30+rows.reduce((a,r)=>a+r.h,0)+92;
+  const top=M+92,chipsH=58,H=top+chipsH+18+(mapH?mapH+34+(legendList.length?22:0):0)+(prof?profH+62:0)+30+rows.reduce((a,r)=>a+r.h,0)+92;
   const c=document.createElement('canvas');c.width=W*S;c.height=H*S;const g=c.getContext('2d');g.scale(S,S);g.textBaseline='alphabetic';
   const rr=(x,y,w,h,r)=>{g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();};
   const fit=(text,max)=>{let t=String(text);while(g.measureText(t).width>max&&t.length>3)t=`${t.slice(0,-2)}…`;return t;};
@@ -982,7 +1053,10 @@ async function saveCompareImage(){if(!compare?.a||!compare?.b)return;const A=com
   const chip=(x,side,k)=>{const col0=COL[k];rr(x,top,col,chipsH,12);g.fillStyle=card;g.fill();g.lineWidth=1.6;g.strokeStyle=col0.fill;g.stroke();g.fillStyle=col0.fill;g.beginPath();g.arc(x+26,top+chipsH/2,12,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.font=`700 12px ${sans}`;g.textAlign='center';g.fillText(k.toUpperCase(),x+26,top+chipsH/2+4);g.textAlign='start';g.fillStyle=col0.dark;g.font=`17px ${serif}`;g.fillText(fit(side.name,col-60),x+48,top+25);g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText(fit([side.tier,side.village].filter(Boolean).join(' · '),col-60),x+48,top+44);};
   chip(x1,A,'a');chip(x2,B,'b');
   let y=top+chipsH+18;
-  if(mapH){for(const [img,x] of [[maps[0],x1],[maps[1],x2]]){g.save();rr(x,y,col,mapH,12);g.clip();g.drawImage(img,x,y,col,mapH);g.restore();rr(x+.5,y+.5,col-1,mapH-1,12);g.strokeStyle=line;g.lineWidth=1;g.stroke();}y+=mapH+20;g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText('Same scale, north up · lines: parcels · arrow: downhill',x1,y);y+=14;}
+  const box=(img,x,yy,w,h)=>{g.save();rr(x,yy,w,h,12);g.clip();g.drawImage(img,x,yy,w,h);g.restore();rr(x+.5,yy+.5,w-1,h-1,12);g.strokeStyle=line;g.lineWidth=1;g.stroke();};
+  if(mapH){if(maps.length===1)box(maps[0],x1,y,mapW,mapH);else{box(maps[0],x1,y,col,mapH);box(maps[1],x2,y,col,mapH);}y+=mapH+20;g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText(CMP_NOTES[view],x1,y);y+=14;
+    if(legendList.length){y+=8;let lx=x1;g.font=`12px ${sans}`;for(const e of legendList){const w=g.measureText(e.name).width+28;if(lx+w>W-M)break;g.fillStyle=e.colour;rr(lx,y,11,11,2);g.fill();g.fillStyle=ink;g.fillText(e.name,lx+16,y+10);lx+=w;}y+=14;}}
+  if(prof){y+=18;g.fillStyle=muted;g.font=`600 10.5px ${sans}`;g.fillText('DOWN THE SLOPE',x1,y);y+=10;box(prof,x1,y,full,profH);y+=profH+20;g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText('Elevation averaged across each cru · bands: the rock underneath (BRGM)',x1,y);y+=14;}
   y+=16;
   const bar=(x,yy,v,max,k)=>{rr(x,yy,col,6,3);g.fillStyle='#e9e1d3';g.fill();if(Number.isFinite(v)&&max>0){rr(x,yy,Math.max(6,col*v/max),6,3);g.fillStyle=COL[k].fill;g.fill();}};
   const val=(x,yy,big,small)=>{g.fillStyle=ink;g.font=`20px ${serif}`;g.fillText(fit(big,col),x,yy);if(small){g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText(fit(small,col),x,yy+19);}};
@@ -1041,7 +1115,9 @@ async function copyShareLink(btn){const url=shareUrl(),label=btn?.querySelector(
   if(document.documentElement.classList.contains('phone-ui')&&navigator.share){try{await navigator.share({title:document.title,url});return;}catch(e){if(e?.name==='AbortError')return;}}
   try{await navigator.clipboard.writeText(url);done('Link copied');}catch{window.prompt('Copy this link',url);}}
 const LINK_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>';
-function addShareButton(host){if(!host||host.querySelector('.share-link-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn';b.title='Copy a link that opens this view';b.innerHTML=`${LINK_ICON}<span class="share-label">Share</span>`;b.addEventListener('click',e=>{e.stopPropagation();copyShareLink(b);});const head=host.querySelector?.('.fact-heading')||host;head.append(b);}
+function addShareButton(host){if(!host||host.querySelector('.share-link-btn'))return;const b=document.createElement('button');b.type='button';b.className='share-link-btn';b.title='Copy a link that opens this view';b.innerHTML=`${LINK_ICON}<span class="share-label">Share</span>`;b.addEventListener('click',e=>{e.stopPropagation();copyShareLink(b);});factActions(host).append(b);}
+// Share and Compare sit together in one group at the end of the panel head, so they wrap as a pair.
+function factActions(host){const head=host.querySelector?.('.fact-heading');if(!head)return host;let row=head.querySelector(':scope>.fact-actions');if(!row){row=document.createElement('div');row.className='fact-actions';head.append(row);}return row;}
 function setupShareButtons(){const save=$('#share-button');if(save&&!$('#copy-link-button')){const b=document.createElement('button');b.id='copy-link-button';b.type='button';b.title='Copy a link that opens this view';b.innerHTML=`${LINK_ICON}<span class="button-label share-label">Copy link</span>`;b.addEventListener('click',()=>copyShareLink(b));save.after(b);}}
 async function boot(){try{await applyRegion();[index,,useAvif]=await Promise.all([loadIndex(),loadRegionalData(),avifSupported()]);for(const tile of Object.values(textureManifest))for(const key of ['url','urlAvif'])if(tile?.[key])tile[key]=dataUrl(tile[key]).href;setup()}catch(e){debug.resourceErrors.push(String(e.message));ui.loading.hidden=true;ui.error.hidden=false;ui.errorMsg.textContent=e.message;}}
 boot();

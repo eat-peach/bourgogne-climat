@@ -1346,3 +1346,58 @@ html:not(.phone-ui) .terroir-control+.layers-toggle{margin-left:0!important}
 html:not(.phone-ui) .seg{height:32px;box-sizing:border-box}
 html:not(.phone-ui) .opacity-control,html:not(.phone-ui) .classification-toggle,html:not(.phone-ui) .terroir-toggle,html:not(.phone-ui) .layers-toggle{height:32px;box-sizing:border-box}
 html:not(.phone-ui) .classification-toggle[aria-expanded=true],html:not(.phone-ui) .layers-toggle[aria-expanded=true],html:not(.phone-ui) .terroir-toggle[aria-expanded=true],html:not(.phone-ui) .terroir-toggle.is-active{border-color:var(--line);box-shadow:inset 0 0 0 1px #7b405155;background:#7b40510c}
+
+/* ---- compare: map style switch (parcels / geology / overlay) and the slope profile ---- */
+.cmp-figures{margin-top:12px}
+.cmp-view-tabs{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:#fffdf7}
+.cmp-view-tabs button{border:0;background:none;padding:5px 13px;border-radius:999px;font:600 12px var(--sans);color:var(--muted);cursor:pointer}
+.cmp-view-tabs button:hover{color:var(--ink)}
+.cmp-view-tabs button[aria-selected="true"]{background:var(--wine);color:#fff}
+.cmp-figures .cmp-shapes{margin-top:8px}
+.cmp-shapes.is-overlay .cmp-shape{grid-column:1/-1}
+.cmp-geo-units path{stroke-width:.6}
+.cmp-geo-map .cmp-map-lieux{stroke:#3a2d22;opacity:.3}
+.cmp-shape-halo{fill:none;stroke:#fffdf7;stroke-width:4.6;stroke-linejoin:round;opacity:.9}
+.cmp-geo-map .cmp-shape-line{stroke-width:2.2}
+.cmp-geo-legend{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 14px;margin:2px 0 0;padding:0;list-style:none;font:11px/1.4 var(--sans);color:var(--ink)}
+.cmp-geo-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;box-shadow:inset 0 0 0 1px #0002}
+.cmp-overlay path.cmp-ov-a,.cmp-overlay rect.cmp-ov-a{fill:#7f77dd33;stroke:#534ab7;stroke-width:2;stroke-linejoin:round}
+.cmp-overlay path.cmp-ov-b,.cmp-overlay rect.cmp-ov-b{fill:#1d9e7533;stroke:#0f6e56;stroke-width:2;stroke-linejoin:round}
+.cmp-overlay rect{stroke-width:1.4!important}
+.cmp-ov-key{font:600 10.5px var(--sans)}
+.cmp-ov-dir path{fill:none;stroke:var(--muted);stroke-width:1.3;stroke-linecap:round}
+.cmp-ov-dir text{fill:var(--muted);font:600 9px var(--sans)}
+.cmp-profile{margin:14px 0 4px}
+.cmp-profile h4{margin:0 0 6px;font:600 10.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cmp-profile-svg{display:block;width:100%;height:auto;border-radius:10px;background:#fffdf7;border:1px solid var(--line)}
+.cmp-prof-grid{fill:none;stroke:#e6dccb;stroke-width:.8}
+.cmp-prof-axis text,.cmp-prof-axis-label{fill:var(--muted);font:600 9px var(--sans)}
+.cmp-prof-line{fill:none;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.cmp-prof-a{stroke:#534ab7}.cmp-prof-b{stroke:#0f6e56}
+.cmp-prof-tag,.cmp-prof-key{font:700 10px var(--sans)}
+.cmp-prof-tag-a{fill:#534ab7}.cmp-prof-tag-b{fill:#0f6e56}
+.cmp-profile .cmp-shapes-note{margin-top:4px}
+html.phone-ui .cmp-prof-axis text,html.phone-ui .cmp-prof-axis-label{font-size:12.5px}
+html.phone-ui .cmp-prof-tag,html.phone-ui .cmp-prof-key{font-size:13.5px}
+html.phone-ui .cmp-ov-key{font-size:14px}
+/* ---- UI audit: tighter panel head, one action row, consistent notes ---- */
+/* the close button sits on the kicker line instead of a row of its own */
+html:not(.phone-ui) .detail-panel:has(.feature-summary){padding-top:20px}
+.detail-panel:has(.feature-summary) .feature-section{margin-top:0}
+.detail-panel:has(.feature-summary) #feature-card{margin-top:0}
+html:not(.phone-ui) .detail-panel:has(.feature-summary) .detail-close{top:11px;right:16px}
+/* commune line: one size, label and name in the same voice */
+.feature-summary .fact-village-name{font:15px/1.35 var(--serif);margin-top:4px}
+.feature-summary .fact-commune-label{font:inherit;color:var(--muted)}
+/* identity chips and Share / Compare share one row when they fit */
+.feature-summary .fact-heading{display:flex;flex-wrap:wrap;align-items:center;column-gap:6px;padding-bottom:16px}
+.feature-summary .fact-heading>.fact-tier,.feature-summary .fact-heading>h3{flex:0 0 100%}
+.feature-summary .fact-heading>.fact-chips{margin:10px 2px 0 0}
+.feature-summary .fact-heading>.fact-chips .fact-chip{margin:0}
+.feature-summary .fact-heading>.share-link-btn{margin-top:10px}
+/* button labels centred like the compare buttons */
+.share-link-btn .share-label{margin:0}
+/* small notes under the compare figures stay sans, like the other captions */
+.detail-section .cmp-shapes-note{font:11px/1.4 var(--sans);color:var(--muted)}
+.feature-summary .fact-heading>.fact-actions{display:flex;gap:6px;margin-top:10px}
+.feature-summary .fact-actions .share-link-btn{display:inline-flex;margin:0}

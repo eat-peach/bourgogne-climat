@@ -34,11 +34,11 @@ test('A and B outlines are drawn at one shared scale with north, scale bar and a
   assert.match(app, /scale=Math\.min\(\.\.\.sides\.map\(v=>Math\.min\(\(W-PAD\*2\)\/Math\.max\(v\.w,1\)/);
   assert.match(app, /class="cmp-shape-north"/);
   assert.match(app, /class="cmp-shape-scale"/);
-  assert.match(app, /html\+=compare\.shapes\?\.key===compareKey\(\)\?compare\.shapes\.html:compareShapes\(A,B\);/);
+  assert.match(app, /html\+=compare\.shapes\?\.key===compareKey\(\)\?compareFiguresHtml\(\):compareShapes\(A,B\);/);
 });
 
 test('the detailed views are flat north-up maps at one scale, and Show both outlines A and B on the 3D map', () => {
-  assert.match(app, /function renderCompareMaps\(sides,cru\)/);
+  assert.match(app, /function renderCompareMaps\(sides,cru,fr\)/);
   assert.ok(!app.includes('renderCompare3D'), 'no 3D thumbnails');
   assert.match(app, /renderer\?\.setCompareOutlines\?\.\(\[\{rings:ga\.rings,color:0xb3abff\},\{rings:gb\.rings,color:0x4fe0a6\}\]\)/);
   assert.match(renderer, /setCompareOutlines\(items = \[\]\)/);
@@ -54,4 +54,15 @@ test('parcels offer Compare for their cru, and a comparison can be saved as an i
   assert.match(app, /addParcelCompareButton\(\$\('#feature-card'\),provenance\)/);
   assert.match(app, /const row=card\.querySelector\('\.cmp-actions'\);if\(row\)\{addShareButton\(row\);addCompareSaveButton\(row\);/);
   assert.match(app, /async function saveCompareImage\(\)/);
+});
+
+test('compare maps switch between parcels, geology and an overlay, and a slope profile shows both crus with their rock', () => {
+  assert.match(app, /const CMP_VIEWS=\[\['parcels','Parcels'\],\['geology','Geology'\],\['overlay','Overlay'\]\];/);
+  assert.match(app, /function renderGeologyMaps\(sides,fr\)/);
+  assert.match(app, /function renderOverlay\(sides\)/);
+  assert.match(app, /const turn=Number\.isFinite\(v\.fall\)\?\(180-v\.fall\)\*Math\.PI\/180:0/);
+  assert.match(app, /function fallLine\(v\)/);
+  assert.match(app, /function slopeProfile\(v\)/);
+  assert.match(app, /profile:renderProfile\(sides\.map\(slopeProfile\)\)/);
+  assert.match(app, /profSvg=document\.querySelector\('#feature-card \.cmp-profile-svg'\)/);
 });
