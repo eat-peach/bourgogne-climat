@@ -66,3 +66,14 @@ test('compare maps switch between parcels, geology and an overlay, and a slope p
   assert.match(app, /profile:renderProfile\(sides\.map\(slopeProfile\)\)/);
   assert.match(app, /profSvg=document\.querySelector\('#feature-card \.cmp-profile-svg'\)/);
 });
+
+test('map labels hold steady while the map moves: dwell time, overlap tolerance, sticky nudge, fade-in', () => {
+  assert.match(renderer, /const LABEL_DWELL_MS = 320, LABEL_HYSTERESIS_PX = 3;/);
+  assert.match(renderer, /if \(box && !wasShown && recent\) \{ dwelling = true; continue; \}/);
+  assert.match(renderer, /if \(item\.off != null && item\.off < offsets\.length\)/);
+});
+
+test('lieu-dit edges shared by two lieux-dits are drawn once and are not simplified', () => {
+  assert.match(renderer, /if \(key === 'climats'\) \{ this\.addSharedEdges\(batch, ring\); continue; \}/);
+  assert.match(renderer, /addSharedEdges\(batch, ring\) \{ const seen = batch\.seen \|\|= new Set\(\)/);
+});

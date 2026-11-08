@@ -1486,3 +1486,8 @@ html.phone-ui .scene-controls>*{justify-self:stretch!important}
 html.phone-ui .scene-controls>.control-group{width:100%!important;box-sizing:border-box}
 html.phone-ui .scene-controls>.control-group>.seg{flex:1 1 auto;display:flex;width:100%;box-sizing:border-box}
 html.phone-ui .scene-controls>.control-group>.seg>button{flex:1 1 0!important;justify-content:center;text-align:center;min-width:0}
+
+/* map labels fade in when they appear (the animation replays each time [hidden] is removed) */
+@keyframes map-label-in{from{opacity:0}to{opacity:1}}
+.map-label{animation:map-label-in .18s ease-out}
+@media (prefers-reduced-motion:reduce){.map-label{animation:none}}
