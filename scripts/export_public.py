@@ -20,7 +20,8 @@ DEFAULT_OUT = SITE.parent / 'github-export'
 
 INCLUDE = [r'^dist/(?!data/|rhone/data/)', r'^scripts/', r'^tests/', r'^migrations/', r'^worker/', r'^regions/[^/]+/region\.json$',
            r'^performance/[^/]+\.(mjs|md)$', r'^public-repo/', r'^(wrangler\.jsonc|package\.json|README\.md|start-local\.ps1|\.gitignore|\.dev\.vars\.example)$']
-EXCLUDE = [r'\.(tif|tiff|gpkg)$', r'^dist/data/', r'^dist/rhone/data/', r'^scripts/data/']
+EXCLUDE = [r'\.(tif|tiff|gpkg)$', r'^dist/data/', r'^dist/rhone/data/', r'^scripts/data/',
+           r'^dist/mosel/', r'^regions/mosel/', r'^scripts/region_(fetch|build)_de\.py$']  # the Mosel pilot stays local until it goes public
 DATA_ROOTS = ['dist/data', 'dist/rhone/data', 'scripts/data']
 MAP_KEYS = 8          # a dict with more keys than this whose keys look like ids is a lookup table: keep one entry
 

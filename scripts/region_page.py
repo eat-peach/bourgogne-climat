@@ -53,6 +53,8 @@ def main(region_id: str) -> None:
     def relink(match):
         links = re.sub(r'href="\./', 'href="../', match.group(0)).replace(' aria-current="page"', "")
         here = f'<a href="../{cfg["site"]}/">'
+        if links.count(here) != 1 and cfg.get("pilot"):  # a local pilot is not in the public list: only its own page lists it
+            links = links.replace("</nav>", f'{here}{html.escape(cfg["title"])}</a></nav>')
         if links.count(here) != 1:
             raise SystemExit(f"add {cfg['site']} to the atlas list in dist/index.html")
         return links.replace(here, '<a href="./" aria-current="page">')

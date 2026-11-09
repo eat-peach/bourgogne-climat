@@ -318,7 +318,7 @@ class Region:
     def write_region(self, index):
         ids = {e["id"][-5:]: e["id"] for e in index}
         groups = [{"id": g["id"], "label": g["label"], "villages": [ids[c] for c in g["communes"] if c in ids]} for g in self.cfg["groups"]]
-        public = {k: self.cfg[k] for k in ("id", "title", "brand", "description", "classes", "inaoSnapshot", "terrainExaggeration", "latLon", "terms") if k in self.cfg}
+        public = {k: self.cfg[k] for k in ("id", "title", "brand", "description", "classes", "inaoSnapshot", "terrainExaggeration", "latLon", "terms", "owners", "photoTiles", "closeViewHalfSize") if k in self.cfg}
         public["classes"] = [{k: c[k] for k in ("key", "label", "tier", "rank", "colour")} for c in self.cfg["classes"]]
         public["groups"] = groups
         (self.out / "region.json").write_text(json.dumps(public, ensure_ascii=False, indent=1), encoding="utf8")

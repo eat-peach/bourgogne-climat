@@ -1,2 +1,5 @@
 # Never upload interrupted-write leftovers.
 *.tmp
+
+# Local pilot regions: never uploaded until they are ready to go public.
+mosel/

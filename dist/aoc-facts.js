@@ -168,6 +168,8 @@ export function spatialAocIdentity(meta = {}) {
 }
 
 export function featureIdentity(meta = {}, layer = 'climats') {
+  // A German register place (Einzellage) belongs to a Großlage; there is no AOC to identify.
+  if (meta.grosslage) return { placeType: 'Einzellage', tier: `Großlage ${meta.grosslage}`, aocEligibility: null };
   const aoc = meta.aocVerification ?? meta.aoc_verification;
   const explicitType = meta.featureType ?? meta.feature_type ?? aoc?.featureType;
   const placeType = explicitType ? String(explicitType) : layer === 'parcels' ? 'Appellation area' : layer === 'cadastre' ? 'Cadastral parcel' : 'Lieu-dit';

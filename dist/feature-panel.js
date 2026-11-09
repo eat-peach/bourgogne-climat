@@ -139,7 +139,7 @@ export function renderFeaturePanel(card, { title, subtitle, identity = [], area,
   const ownership = element('section', 'fact-ownership');
   ownership.dataset.ownership = '';
   if (ownershipPrompt) ownership.append(element('h4', 'fact-label', 'Ownership'), element('p', 'fact-value is-unavailable', ownershipPrompt));
-  else { ownership.classList.add('is-hint'); ownership.append(element('p', 'fact-hint', 'To see recorded owners, tap a cadastral parcel on the map.')); }
+  else if (!document.documentElement.hasAttribute('data-no-owners')) { ownership.classList.add('is-hint'); ownership.append(element('p', 'fact-hint', 'To see recorded owners, tap a cadastral parcel on the map.')); }
 
   const details = element('details', 'fact-disclosure');
   details.append(element('summary', '', 'Sources & details'));

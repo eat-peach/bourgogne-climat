@@ -7,7 +7,7 @@
  * are source gaps and are never replacement elevations.
  */
 
-export const MOSAIC_GRID_SIZE = 193;
+export const MOSAIC_GRID_SIZE = 193, DETAIL_MAX_VIEW_M = 4200, DETAIL_TILE_LIMIT = 48;
 export const DEFAULT_MAX_SOURCES = 8;
 export const DEFAULT_CACHE_LIMIT = 12;
 
@@ -258,7 +258,7 @@ function sourceCoverageBounds(source) {
 }
 
 /** Compose a viewport scene from the loaded source scenes. */
-export function buildMosaicScene({ bounds, sources = [], backgroundSources = [], gridSize = MOSAIC_GRID_SIZE, textureManifest = {}, textureBase = '', maxFeaturesPerLayer = 4000, focusId = null, preferAvif = false } = {}) {
+export function buildMosaicScene({ bounds, sources = [], backgroundSources = [], gridSize = MOSAIC_GRID_SIZE, textureManifest = {}, textureBase = '', maxFeaturesPerLayer = 4000, focusId = null, preferAvif = false, detailTiles = null } = {}) {
   const viewport = normalizeBounds(bounds);
   if (!viewport || !Number.isInteger(gridSize) || gridSize < 2) throw new Error('Mosaic viewport requires valid bounds and grid size');
   const loaded = sources.map(item => {
@@ -354,6 +354,20 @@ export function buildMosaicScene({ bounds, sources = [], backgroundSources = [],
     seenTextures.add(url);
     output.textureTiles.push({ url: resolveUrl(url), fallbackUrl: avif && jpeg ? resolveUrl(jpeg) : null, bounds: source.bounds, sourceId: source.id || source.entry?.id || source.scene?.id });
   }
+  // Sharp photos for close views (a region's data/photo-tiles/): the tiles under a small assembled view are drawn over
+  // the village photos, nearest the middle first, at most DETAIL_TILE_LIMIT. Optional, so a missing one shows the
+  // village photo beneath.
+  if (detailTiles?.tiles?.length && viewport) {
+    const T = Number(detailTiles.tileSize) || 500, span = Math.max(viewport[2] - viewport[0], viewport[3] - viewport[1]);
+    if (span <= (Number(detailTiles.maxViewM) || DETAIL_MAX_VIEW_M)) {
+      const have = detailTiles._set || (detailTiles._set = new Set(detailTiles.tiles)), cx = (viewport[0] + viewport[2]) / 2, cy = (viewport[1] + viewport[3]) / 2, near = [];
+      for (let x = Math.floor(viewport[0] / T); x < Math.ceil(viewport[2] / T); x++) for (let y = Math.floor(viewport[1] / T); y < Math.ceil(viewport[3] / T); y++)
+        if (have.has(`${x}_${y}`)) near.push({ x, y, d: Math.hypot((x + .5) * T - cx, (y + .5) * T - cy) });
+      near.sort((a, b) => a.d - b.d);
+      for (const { x, y } of near.slice(0, DETAIL_TILE_LIMIT).reverse())  // farthest first, so the middle paints last
+        output.textureTiles.push({ url: resolveUrl(String(detailTiles.url).replace('{x}', x).replace('{y}', y)), bounds: [x * T, y * T, (x + 1) * T, (y + 1) * T], sourceId: `detail:${x}_${y}`, optional: true, detail: true });
+    }
+  }
   if (output.textureTiles.length === 1) output.texture = output.textureTiles[0].url;
   const featureSets = new Map(LAYERS.map(layer => [layer, []]));
   const seen = new Map(LAYERS.map(layer => [layer, new Set()]));
@@ -419,7 +433,8 @@ function foldVillageName(value) { return String(value || '').normalize('NFD').re
 export class SceneMosaic {
   // coverage: how much wider than the view the assembled area is (at least minHalfSize metres from its centre), so
   // zooming back out or panning a little needs no re-assembly. 1 = exactly the view.
-  constructor({ index, loadScene, textureManifest = {}, textureBase = '', backgroundSources = [], cacheLimit = DEFAULT_CACHE_LIMIT, maxLoadedScenes = DEFAULT_MAX_SOURCES, gridSize = MOSAIC_GRID_SIZE, boundaries = [], preferAvif = false, coverage = 1, minHalfSize = 0 } = {}) {
+  constructor({ index, loadScene, textureManifest = {}, textureBase = '', backgroundSources = [], cacheLimit = DEFAULT_CACHE_LIMIT, maxLoadedScenes = DEFAULT_MAX_SOURCES, gridSize = MOSAIC_GRID_SIZE, boundaries = [], preferAvif = false, coverage = 1, minHalfSize = 0, detailTiles = null } = {}) {
+    this.detailTiles = detailTiles && Array.isArray(detailTiles.tiles) ? detailTiles : null;
     this.coverage = Math.max(1, Number(coverage) || 1); this.minHalfSize = Math.max(0, Number(minHalfSize) || 0);
     this.preferAvif = preferAvif;
     this.index = index || { villages: [] };
@@ -489,7 +504,7 @@ export class SceneMosaic {
     if (generation !== this.generation) return null;
     const sources = loaded.filter(result => result.status === 'fulfilled' && result.value?.scene).map(result => result.value);
     const contextSources = this.backgroundSources.filter(source => boundsIntersects(sceneBounds(source, source), bounds));
-    return { scene: buildMosaicScene({ bounds, sources, backgroundSources: contextSources, gridSize: this.gridSize, textureManifest: this.textureManifest, textureBase: this.textureBase, focusId, preferAvif: this.preferAvif }), sources, bounds };
+    return { scene: buildMosaicScene({ bounds, sources, backgroundSources: contextSources, gridSize: this.gridSize, textureManifest: this.textureManifest, textureBase: this.textureBase, focusId, preferAvif: this.preferAvif, detailTiles: this.detailTiles }), sources, bounds };
   }
 }
 

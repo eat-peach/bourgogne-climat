@@ -481,6 +481,7 @@ async function selectCru(cru){if(compare&&!compare.flying&&(compare.picking||com
 async function applyRegion(){
   const meta=document.querySelector('meta[name="atlas-region"]');if(!meta)return;
   await loadRegion(new URL(meta.content,location.href));
+  document.documentElement.toggleAttribute('data-no-owners',REGION.owners===false);/* no owner register in this region */
   if(REGION.groups)setWineRegions(REGION.groups);
   if(!REGION.classes.length)return;
   const dots=$('.classification-dots');if(dots)dots.innerHTML=REGION.classes.slice(0,5).map(c=>`<i style="background:${esc(c.colour)}"></i>`).join('');
@@ -670,10 +671,11 @@ const leftDrawer=drawer(sidebar,'left',`${term('village')} index`),rightDrawer=d
    document.addEventListener('click',event=>{if(classificationPopover?.hidden)return;if(!event.target.closest?.('.classification-control'))closeClassification();});
    window.addEventListener('resize',positionClassification);
   regionalGroups=groupVillagesByWineRegion(index.villages);regionCollapsed=new Map(regionalGroups.map(group=>[group.id,true]));const regionSelect=$('#wine-region-select');if(regionSelect){regionSelect.replaceChildren(new Option(term('allWineRegions'),'all'),...wineRegionOptions().map(region=>new Option(region.label,region.id)));regionSelect.addEventListener('change',()=>{wineRegion=regionSelect.value;ui.list.scrollTop=0;renderList();});}
-  const mosaicOptions={maxLoadedScenes:12,gridSize:257,coverage:1.8,minHalfSize:3000};
+  const mosaicOptions={maxLoadedScenes:12,gridSize:257,coverage:1.8,minHalfSize:REGION.closeViewHalfSize||3000,detailTiles:photoTileIndex};/* a smaller close view and the sharp tiles only where the region has them */
   mosaic=new SceneMosaic({index,loadScene,textureManifest,textureBase:new URL('./',location.href).href,backgroundSources:contextTerrain,boundaries:communeBoundaries,cacheLimit:0,preferAvif:useAvif,...mosaicOptions});
   useMosaicWorker(mosaic,{index,textureManifest,options:mosaicOptions});
   renderer=new AtlasRenderer({canvas:$('#terrain-canvas'),container:$('#canvas-stage'),labels:$('#map-labels'),labelObstacles,progressiveBuild:true,onViewChange:view=>{streamView(view);scheduleShareSync();},onSelect:(feature,layer,provenance)=>{const p=feature?.properties||feature||{};const classification=p.classification||p.category;const title=p.name||p.nom||'Lieu-dit';const source=layer==='parcels'?'INAO':(layer==='climats'||layer==='climat')?'DGFiP / Etalab':layer==='buildings'||layer==='roads'||layer==='forest'?'IGN BD TOPO':'Atlas source';showFeatureFacts(feature,layer,provenance);},onError:(e)=>debug.resourceErrors.push(String(e))});
+  if(photoTileIndex&&!matchMedia('(pointer:coarse)').matches&&(renderer.renderer?.capabilities?.maxTextureSize||0)>=4096)renderer.maxRaster=4096;/* desktop: the composed photo at 4096 px, so 0.5 m tiles show */
   renderer.setCommuneBoundaries?.(communeBoundaries);
   if(/[?&]debug\b/.test(location.search))debug.renderer=renderer;
   document.querySelectorAll('.interaction-mode').forEach(button=>button.addEventListener('click',()=>{interactionMode=button.dataset.interaction==='pan'?'pan':'rotate';document.querySelectorAll('.interaction-mode').forEach(item=>{const active=item.dataset.interaction===interactionMode;item.classList.toggle('is-active',active);item.setAttribute('aria-pressed',String(active));});renderer.setInteraction?.(interactionMode);updateInteractionHint();}));
@@ -1166,6 +1168,7 @@ function addShareButton(host){if(!host||host.querySelector('.share-link-btn'))re
 // Share and Compare sit together in one group at the end of the panel head, so they wrap as a pair.
 function factActions(host){const head=host.querySelector?.('.fact-heading');if(!head)return host;let row=head.querySelector(':scope>.fact-actions');if(!row){row=document.createElement('div');row.className='fact-actions';head.append(row);}return row;}
 function setupShareButtons(){const save=$('#share-button');if(save&&!$('#copy-link-button')){const b=document.createElement('button');b.id='copy-link-button';b.type='button';b.title='Copy a link that opens this view';b.innerHTML=`${LINK_ICON}<span class="button-label share-label">Copy link</span>`;b.addEventListener('click',()=>copyShareLink(b));save.after(b);}}
-async function boot(){try{await applyRegion();[index,,useAvif]=await Promise.all([loadIndex(),loadRegionalData(),avifSupported()]);for(const tile of Object.values(textureManifest))for(const key of ['url','urlAvif'])if(tile?.[key])tile[key]=dataUrl(tile[key]).href;setup()}catch(e){debug.resourceErrors.push(String(e.message));ui.loading.hidden=true;ui.error.hidden=false;ui.errorMsg.textContent=e.message;}}
+let photoTileIndex=null;/* sharp close-view photos (region.json photoTiles): data/photo-tiles/index.json */
+async function boot(){try{await applyRegion();if(REGION.photoTiles)photoTileIndex=await fetchJson(dataUrl('./data/photo-tiles/index.json')).catch(()=>null);[index,,useAvif]=await Promise.all([loadIndex(),loadRegionalData(),avifSupported()]);for(const tile of Object.values(textureManifest))for(const key of ['url','urlAvif'])if(tile?.[key])tile[key]=dataUrl(tile[key]).href;setup()}catch(e){debug.resourceErrors.push(String(e.message));ui.loading.hidden=true;ui.error.hidden=false;ui.errorMsg.textContent=e.message;}}
 boot();
 

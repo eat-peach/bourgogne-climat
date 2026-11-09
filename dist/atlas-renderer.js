@@ -1001,7 +1001,7 @@ export class AtlasRenderer {
     fog.far = Math.max(edge * .96, d * 2.6); fog.near = Math.min(Math.max(fog.far * HAZE_START, d * 1.7), fog.far * .85);
     this.hazeUniforms.hazeNear.value = fog.near; this.hazeUniforms.hazeFar.value = fog.far;
   }
-  rasterSize() { return Math.min(MAX_RASTER_SIZE, 2048); }
+  rasterSize() { return this.maxRaster || Math.min(MAX_RASTER_SIZE, 2048); }
   // Decoded photo tiles are kept for reuse; the oldest are released past the limit, except any a photo being composed
   // still needs (closing one of those made the whole composed photo fail, leaving the terrain grey).
   cacheImage(key, image) { if (!image) return; if (this.imageCache.has(key)) this.imageCache.delete(key); this.imageCache.set(key, image); const busy = this._tilesInUse || new Set(); for (const oldest of [...this.imageCache.keys()]) { if (this.imageCache.size <= IMAGE_CACHE_LIMIT) break; const evicted = this.imageCache.get(oldest); if (busy.has(evicted)) continue; this.imageCache.delete(oldest); if (oldest.startsWith('tile:')) evicted?.close?.(); } }
@@ -1201,16 +1201,21 @@ export class AtlasRenderer {
     const touches = new Map(); let g = null, started = false;
     const point = (x, y, planeY) => {
       const box = canvas.getBoundingClientRect(), ray = new THREE.Raycaster();
+      this.camera.updateMatrixWorld(); // a zoom earlier in the same finger event has moved the camera
       ray.setFromCamera(new THREE.Vector2((x - box.left) / box.width * 2 - 1, 1 - (y - box.top) / box.height * 2), this.camera);
       const hit = new THREE.Vector3();
       return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), hit) ? hit : null;
     };
     const distance = () => this.camera.position.distanceTo(this.controls.target);
-    // Ground-anchored pan: the point under the finger(s) stays under them. Near the horizon a tiny finger
-    // move maps to kilometres, so a step longer than the view distance is ignored.
-    const pan = (x0, y0, x1, y1, y = this.controls.target.y) => {
-      const a = point(x0, y0, y), b = point(x1, y1, y); if (!a || !b) return;
-      const shift = a.sub(b); shift.y = 0; if (shift.length() > distance()) return;
+    // Ground-anchored pan: the ground point grabbed when the finger(s) went down is put back under them on every
+    // move. It is not a sum of small steps, so nothing is lost: near the horizon (or when a busy phone delivers one
+    // big step) a move is only capped at 1.5 view distances and the next move catches up. Summing steps and
+    // dropping the big ones made the map lose the finger and jump.
+    const panTo = (x, y) => {
+      if (!g.grab) { g.grab = point(x, y, g.planeY); return; }
+      const hit = point(x, y, g.planeY); if (!hit) return; // finger above the horizon: wait until it comes back
+      const shift = g.grab.clone().sub(hit); shift.y = 0;
+      const max = distance() * 1.5, len = shift.length(); if (len > max) shift.multiplyScalar(max / len);
       this.controls.target.add(shift); this.camera.position.add(shift);
     };
     const zoom = (x, y, factor, planeY = this.controls.target.y) => {
@@ -1242,8 +1247,8 @@ export class AtlasRenderer {
       // Adding or lifting a finger keeps the ground height already in use: no new terrain raycast mid-gesture
       // (it is slow on a big mesh) and no change of pan plane, so the view does not jump.
       const keepY = g?.planeY;
-      if (touches.size === 1) { const [t] = touches.values(); g = { n: 1, x: t.x, y: t.y, x0: t.x, y0: t.y, t0: performance.now(), tap, fromLabel: g?.fromLabel, planeY: keepY ?? groundY(t.x, t.y) }; }
-      else if (touches.size === 2) { const s = two(); g = { n: 2, start: s, last: s, lock: null, twistOn: false, tap: false, fromLabel: g?.fromLabel, planeY: keepY ?? groundY(s.x, s.y) }; }
+      if (touches.size === 1) { const [t] = touches.values(); g = { n: 1, x: t.x, y: t.y, x0: t.x, y0: t.y, t0: performance.now(), tap, fromLabel: g?.fromLabel, planeY: keepY ?? groundY(t.x, t.y) }; g.grab = point(t.x, t.y, g.planeY); }
+      else if (touches.size === 2) { const s = two(); g = { n: 2, start: s, last: s, lock: null, twistOn: false, tap: false, fromLabel: g?.fromLabel, planeY: keepY ?? groundY(s.x, s.y) }; g.grab = point(s.x, s.y, g.planeY); }
     };
     surface.addEventListener('pointerdown', e => {
       if (e.pointerType !== 'touch' || !onMap(e.target)) return;
@@ -1261,7 +1266,7 @@ export class AtlasRenderer {
         const [t] = touches.values();
         if (g.tap && Math.hypot(t.x - g.x0, t.y - g.y0) > TOUCH.tapPx) g.tap = false;
         if (!g.tap) {
-          if (this.interaction === 'pan') pan(g.x, g.y, t.x, t.y, g.planeY);
+          if (this.interaction === 'pan') panTo(t.x, t.y);
           else { const h = canvas.clientHeight || 1; orbit(-(t.x - g.x) / h * Math.PI * 1.2, -(t.y - g.y) / h * Math.PI * .9); }
           changed();
         }
@@ -1276,14 +1281,14 @@ export class AtlasRenderer {
         else if (Math.abs(dy) > TOUCH.tilt && together && Math.abs(scale) < TOUCH.pinch / 2) g.lock = 'tilt';
         // still inside the dead zone: the two fingers drag the map together (no zoom or turn yet), so the view
         // follows the hand instead of freezing and then jumping when a gesture locks in
-        if (!g.lock) { pan(last.x, last.y, s.x, s.y, g.planeY); g.last = s; changed(); return; }
+        if (!g.lock) { panTo(s.x, s.y); g.last = s; changed(); return; }
       }
       if (g.lock === 'pinch') {
         zoom(s.x, s.y, last.d / s.d, g.planeY);
-        pan(last.x, last.y, s.x, s.y, g.planeY);
+        panTo(s.x, s.y);
         if (!g.twistOn && Math.abs(wrap(s.angle - start.angle)) > TOUCH.twistDuringPinch) g.twistOn = true;
         if (g.twistOn) orbit(wrap(s.angle - last.angle), 0);
-      } else if (g.lock === 'twist') { pan(last.x, last.y, s.x, s.y, g.planeY); orbit(wrap(s.angle - last.angle), 0); }
+      } else if (g.lock === 'twist') { panTo(s.x, s.y); orbit(wrap(s.angle - last.angle), 0); }
       else if (g.lock === 'tilt') orbit(0, -(s.y - last.y) / (canvas.clientHeight || 1) * Math.PI * .8);
       g.last = s; changed();
     }, { capture: true });
