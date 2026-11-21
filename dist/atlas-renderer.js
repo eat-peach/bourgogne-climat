@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { regionClass } from './region.js';
-import { classAccumulation, flowLength, LAND_COVER, landRunoffMm, rainRunoff, stormRunoffMm, wetnessFields } from './simulation.js';
+import { classAccumulation, coldAirFields, flowLength, frostLineM, frostNight, frostTemperature, LAND_COVER, landRunoffMm, rainRunoff, stormRunoffMm, wetnessFields } from './simulation.js';
 
 export const WORLD_ORIGIN_EPSG = Object.freeze({ easting: 850000, northing: 6650000 });
 export const WORLD_SCALE = 0.035;
@@ -30,6 +30,8 @@ const BASE_GAMMA = 2 ** .2;
 // that drains through each cell.
 const SUN_LOW = new THREE.Color(0xffa45c), SUN_HIGH = new THREE.Color(0xfff3e0), SKY_NIGHT = new THREE.Color(0x7d90bb), WHITE = new THREE.Color(0xffffff);
 const BACKGROUND_DAY = new THREE.Color(0xd9d0c3), BACKGROUND_NIGHT = new THREE.Color(0x3a4150);
+// Frost night: a clear, moonlit look, dark enough to read as night but light enough to see the vineyards.
+const FROST_SKY = new THREE.Color(0xb9c6e4), BACKGROUND_FROST = new THREE.Color(0x56607a);
 // Flowing water after a storm. Each channel's peak flow is estimated as the water that drains through it during the
 // storm, spread over the storm's length plus the time water takes to arrive from the farthest point upslope (m³/s).
 // A channel shows from WATER_MIN_PEAK; its width is WATER_WIDTH × √(peak flow) metres (drawn several times wider
@@ -158,7 +160,10 @@ const blankRainTexture = () => { const t = new THREE.DataTexture(new Uint8Array(
 const photoUniforms = { photoSaturation: { value: DISPLAY_DEFAULTS.saturation }, photoGamma: { value: BASE_GAMMA }, sunShade: { value: 0 },
   // Rain on the ground (see rebuildRunoff): rainOn switches it on; soak, film and pond run 0–1 with the storm; front is how
   // far down the slopes the water has travelled (0–1 of the longest travel time); the textures hold the per-cell fields.
-  rainOn: { value: 0 }, rainTime: { value: 0 }, rainSoak: { value: 0 }, rainFilm: { value: 0 }, rainPond: { value: 0 }, rainFront: { value: 1 }, rainGrid: { value: 1 }, rainArrivalScale: { value: 1 }, rainTexA: { value: blankRainTexture() }, rainTexB: { value: blankRainTexture() } };
+  rainOn: { value: 0 }, rainTime: { value: 0 }, rainSoak: { value: 0 }, rainFilm: { value: 0 }, rainPond: { value: 0 }, rainFront: { value: 1 }, rainGrid: { value: 1 }, rainArrivalScale: { value: 1 }, rainTexA: { value: blankRainTexture() }, rainTexB: { value: blankRainTexture() },
+  // Frost night (see rebuildFrost): frostTex holds per grid cell the height above the valley floor, the cold-air flow and
+  // the depth in a local pool; the other values describe the night so far (frostNight), so the shader works out the temperature per pixel.
+  frostOn: { value: 0 }, frostGrid: { value: 1 }, frostFloor: { value: 0 }, frostDepth: { value: 100 }, frostStrength: { value: 0 }, frostDrain: { value: 0 }, frostLocal: { value: 0 }, frostLapse: { value: .0065 }, frostTex: { value: blankRainTexture() } };
 // With Sun & rain sunlight on, ground the sun reaches is warmed and ground in shade is cooled and darkened, judged from
 // how much of its light comes straight from the sun, and a thin line marks the border between the two.
 function saturatePhotoTexture(shader) { Object.assign(shader.uniforms, photoUniforms);
@@ -180,6 +185,15 @@ uniform float rainGrid;
 uniform float rainArrivalScale;
 uniform sampler2D rainTexA;
 uniform sampler2D rainTexB;
+uniform float frostOn;
+uniform float frostGrid;
+uniform float frostFloor;
+uniform float frostDepth;
+uniform float frostStrength;
+uniform float frostDrain;
+uniform float frostLocal;
+uniform float frostLapse;
+uniform sampler2D frostTex;
 varying vec2 vGridUv;
 varying vec2 vRainPos;
 float rainHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -220,6 +234,27 @@ float rainNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. 
         vec3 water = mix(vec3(.035, .065, .1), vec3(.12, .19, .25), ripple * (1. - smoothstep(.15, .5, fwidth(vRainPos.x * 5.))));
         outgoingLight = mix(outgoingLight, water, cover * (.55 + .3 * smoothstep(level, level + .2, pool)));
       }
+    }
+  }
+  if (frostOn > 0.) {
+    // One texel per grid point, row 0 north, sampled at texel centres.
+    vec4 cold = texture2D(frostTex, .5 / frostGrid + vGridUv * (1. - 1. / frostGrid));
+    if (cold.a > .5) {
+      float x = clamp(cold.r / frostDepth, 0., 1.);
+      float t = frostFloor + frostStrength * (1. - (1. - x) * (1. - x)) - frostLapse * max(0., cold.r - frostDepth);
+      t = max(min(t, frostFloor), t - frostLocal * cold.b) - frostDrain * cold.g;
+      float lum = dot(outgoingLight, vec3(.2126, .7152, .0722));
+      // Ground above freezing keeps its colours, a little warmer in the thermal belt; frosted ground turns to rime,
+      // pale blue at 0 °C and icy white-blue by -4 °C, with a fine glitter when zoomed in.
+      float frost = smoothstep(.4, -.4, t), hard = smoothstep(-.5, -4., t), belt = smoothstep(.5, 3., t);
+      outgoingLight *= mix(vec3(1.), vec3(1.1, 1.02, .88), .35 * belt);
+      float glitter = smoothstep(.82, .97, rainNoise(vRainPos * 40.)) * (1. - smoothstep(.15, .45, fwidth(vRainPos.x * 40.)));
+      vec3 rime = mix(vec3(.36, .5, .78), vec3(.78, .87, 1.), hard) * (.65 + .5 * lum) + glitter * .35 * hard;
+      outgoingLight = mix(outgoingLight, rime, frost * (.45 + .4 * hard));
+      // Isotherms about 2 pixels wide whatever the zoom: white at 0 °C, deep blue at -2 °C (where opened buds die).
+      float w = fwidth(t) + 1e-4;
+      outgoingLight = mix(outgoingLight, vec3(1.), .85 * (1. - smoothstep(0., 2.2 * w, abs(t))));
+      outgoingLight = mix(outgoingLight, vec3(.08, .2, .62), .75 * (1. - smoothstep(0., 2. * w, abs(t + 2.))));
     }
   }
   if (sunShade > 0.) {
@@ -536,7 +571,7 @@ export class AtlasRenderer {
   focusVillage() { this.resetView(); }
   rebuildPreservingState() { const view = this.captureView(); const layers = Object.fromEntries(Object.entries(this.layers).filter(([name]) => name !== 'cadastre').map(([name, group]) => [name, group.visible])); this.clear(); this.build(); for (const [name, visible] of Object.entries(layers)) if (this.layers[name]) this.layers[name].visible = visible; if (this.layers.cadastre) this.layers.cadastre.visible = this._cadastreEnabled; if (this.aocMesh && this.layers.parcels) this.aocMesh.visible = this.layers.parcels.visible || Boolean(this.terroirTint || this.geologyLayer); this.restoreSelection(); this.restoreView(view); this.requestRender(); }
   getDebug() { return { village: this.indexVillage?.id || this.indexVillage?.name || null, gridSize: this.grid, bounds: this.bounds, exaggeration: this.exaggeration, mode: this.mode, aocOpacity: this.aocOpacity, drawCalls: this.renderer.info.render.calls, features: this.featureIndex.length }; }
-  build() { const d = this.sceneJSON; const bounds = d.bounds || d.bounds2154 || this.indexVillage?.bounds2154 || this.indexVillage?.bounds; if (!Array.isArray(bounds) || bounds.length !== 4) throw new Error('Scene bounds must be [xmin, ymin, xmax, ymax]'); this.bounds = bounds.map(Number); this.focusBounds = (this.indexVillage?.bounds2154 || this.indexVillage?.bounds || this.bounds).map(Number); const [xmin, ymin, xmax, ymax] = this.bounds; this.widthM = xmax - xmin; this.depthM = ymax - ymin; if (!(this.widthM > 0 && this.depthM > 0)) throw new Error('Scene bounds are invalid'); const heights = d.heights || d.heightGrid || d.terrain?.heights; this.grid = Number(d.gridSize || d.terrain?.gridSize || Math.sqrt(heights?.length || 0)); this.heightGrid = Array.isArray(heights) && Array.isArray(heights[0]) ? heights.flat() : heights; if (!Array.isArray(this.heightGrid) || this.heightGrid.length !== this.grid * this.grid) throw new Error('Scene heights must be a flat or nested square grid'); this.heightGrid = this.heightGrid.map(Number); if (this.heightGrid.some(v => !Number.isFinite(v))) throw new Error('Scene heights contain non-finite values'); this.validMask = this.readMask(d.validMask || d.terrain?.validMask); this.minElevation = Number(d.minElevation ?? Math.min(...this.heightGrid)); this.maxElevation = Number(d.maxElevation ?? Math.max(...this.heightGrid)); this.terrainHeight = Math.max(1, (this.maxElevation - this.minElevation) * WORLD_SCALE * this.exaggeration); this.terrain = this.makeTerrain(); this.sceneParent().add(this.terrain); this.addFeatures(); this.buildAocOverlay(); if (this.progressiveBuild) this.queueBuildStep(() => this.addLabels(), true); else this.addLabels(); this.setMaterialMode(); this.updateParcelVisibility(); this.updateScreenLineResolution(); this.applyLighting(); this.rebuildOwnerHighlight(this.sceneParent()); this.rebuildCompareOutlines(this.sceneParent()); this.rebuildCommuneBoundaries(this.sceneParent()); if (this.progressiveBuild) { const rain = this.runoffState; if (rain && (rain.rainMm || rain.falling)) this.queueBuildStep(() => this.rebuildRunoff(), true); } else this.scheduleRunoffRebuild(); }
+  build() { const d = this.sceneJSON; const bounds = d.bounds || d.bounds2154 || this.indexVillage?.bounds2154 || this.indexVillage?.bounds; if (!Array.isArray(bounds) || bounds.length !== 4) throw new Error('Scene bounds must be [xmin, ymin, xmax, ymax]'); this.bounds = bounds.map(Number); this.focusBounds = (this.indexVillage?.bounds2154 || this.indexVillage?.bounds || this.bounds).map(Number); const [xmin, ymin, xmax, ymax] = this.bounds; this.widthM = xmax - xmin; this.depthM = ymax - ymin; if (!(this.widthM > 0 && this.depthM > 0)) throw new Error('Scene bounds are invalid'); const heights = d.heights || d.heightGrid || d.terrain?.heights; this.grid = Number(d.gridSize || d.terrain?.gridSize || Math.sqrt(heights?.length || 0)); this.heightGrid = Array.isArray(heights) && Array.isArray(heights[0]) ? heights.flat() : heights; if (!Array.isArray(this.heightGrid) || this.heightGrid.length !== this.grid * this.grid) throw new Error('Scene heights must be a flat or nested square grid'); this.heightGrid = this.heightGrid.map(Number); if (this.heightGrid.some(v => !Number.isFinite(v))) throw new Error('Scene heights contain non-finite values'); this.validMask = this.readMask(d.validMask || d.terrain?.validMask); this.minElevation = Number(d.minElevation ?? Math.min(...this.heightGrid)); this.maxElevation = Number(d.maxElevation ?? Math.max(...this.heightGrid)); this.terrainHeight = Math.max(1, (this.maxElevation - this.minElevation) * WORLD_SCALE * this.exaggeration); this.terrain = this.makeTerrain(); this.sceneParent().add(this.terrain); this.addFeatures(); this.buildAocOverlay(); if (this.progressiveBuild) this.queueBuildStep(() => this.addLabels(), true); else this.addLabels(); this.setMaterialMode(); this.updateParcelVisibility(); this.updateScreenLineResolution(); this.applyLighting(); this.rebuildOwnerHighlight(this.sceneParent()); this.rebuildCompareOutlines(this.sceneParent()); this.rebuildCommuneBoundaries(this.sceneParent()); if (this.frostState) this.rebuildFrost(); if (this.progressiveBuild) { const rain = this.runoffState; if (rain && (rain.rainMm || rain.falling)) this.queueBuildStep(() => this.rebuildRunoff(), true); } else this.scheduleRunoffRebuild(); }
   readMask(mask) { if (!Array.isArray(mask) || mask.length !== this.grid * this.grid) return new Array(this.grid * this.grid).fill(true); return mask.map(v => v === true || v === 1 || v === '1'); }
   point(c) { return this.worldPoint(Number(c?.[0]), Number(c?.[1])); }
   validAt(row, col) { return row >= 0 && row < this.grid && col >= 0 && col < this.grid && this.validMask[row * this.grid + col]; }
@@ -668,6 +703,7 @@ export class AtlasRenderer {
     if (this.renderer.shadowMap.enabled !== shadows) { this.renderer.shadowMap.enabled = shadows; if (this.terrain) this.terrain.material.needsUpdate = true; }
     photoUniforms.sunShade.value = sun ? smoothstep(-2, 4, sun.elevation) : 0;
     const overcast = Boolean(this.runoffState?.falling); // grey, softer light while it rains
+    if (!sun && this.frostState) { this.light.intensity = LIGHT_INTENSITY * brightness * .78; this.light.color.copy(FROST_SKY); light.intensity = 0; this.aocMaterial?.color.setScalar(.72); this.scene.background.copy(BACKGROUND_FROST); this.scene.fog.color.copy(this.scene.background); this.requestRender(); return; }
     if (!sun) { this.light.intensity = LIGHT_INTENSITY * brightness * (overcast ? .8 : 1); this.light.color.copy(overcast ? LIGHT_RAIN : WHITE); light.intensity = 0; this.aocMaterial?.color.copy(WHITE); this.scene.background.copy(overcast ? BACKGROUND_RAIN : BACKGROUND_DAY); this.scene.fog.color.copy(this.scene.background); this.requestRender(); return; }
     const day = smoothstep(-6, 8, sun.elevation);
     this.light.intensity = LIGHT_INTENSITY * brightness * (.08 + .2 * day); this.light.color.copy(SKY_NIGHT).lerp(WHITE, day);
@@ -697,6 +733,48 @@ export class AtlasRenderer {
     this.runoffState = next;
     if (wasOn !== isOn || (isOn && !this.layers.runoff && !this._runoffTimer)) this.rebuildRunoff(); else this.updateRunoff();
     this.applyLighting();
+  }
+  // Frost night: { minC } is the dawn temperature on the valley floor, { progress } how far the night has gone from
+  // sunset (0) to dawn (1); null switches it off. The cold-air fields are worked out once per scene (rebuildFrost);
+  // moving through the night only changes shader values.
+  setFrost(state) {
+    const next = state && Number.isFinite(Number(state.minC)) ? { minC: Number(state.minC), progress: clamp(Number(state.progress ?? 1), 0, 1) } : null, was = Boolean(this.frostState);
+    this.frostState = next;
+    if (!next) { photoUniforms.frostOn.value = 0; this.frostSummary = null; this.applyLighting(); return; }
+    if (!was || !this._frost || this._frost.source !== this.heightGrid) this.rebuildFrost(); else this.updateFrost();
+    this.applyLighting();
+  }
+  rebuildFrost() {
+    if (!this.frostState || !this.heightGrid || !(this.grid > 1)) return;
+    const size = this.grid, cell = this.runoffCellMetres(), n = size * size, valid = this.validMask;
+    const routed = this._runoffSource === this.heightGrid && this._runoff ? this._runoff : rainRunoff(this.heightGrid, valid, size, cell);
+    const { above, local, drain } = coldAirFields(this.heightGrid, valid, size, cell, routed);
+    const cover = routed.cover || this.landCover(size), K = LAND_COVER.length, data = new Uint16Array(n * 4), half = THREE.DataUtils.toHalfFloat, one = half(1), zero = half(0);
+    const vines = [];
+    for (let i = 0; i < n; i++) {
+      const ok = !valid || valid[i];
+      data[i * 4] = half(ok ? above[i] : 0); data[i * 4 + 1] = half(ok ? drain[i] : 0); data[i * 4 + 2] = half(ok ? local[i] : 0); data[i * 4 + 3] = ok && cover[i * K + 5] < .5 ? one : zero; // open water takes no rime
+      if (ok && cover[i * K + 1] > .25) vines.push(i);
+    }
+    const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.HalfFloatType); texture.magFilter = texture.minFilter = THREE.LinearFilter; texture.generateMipmaps = false; texture.needsUpdate = true;
+    const old = this._frost?.texture;
+    this._frost = { source: this.heightGrid, texture, above, local, drain, vines, size };
+    const apply = () => { photoUniforms.frostTex.value = texture; photoUniforms.frostGrid.value = size; photoUniforms.frostOn.value = this.frostState ? 1 : 0; if (old && old !== texture) old.dispose(); };
+    if (this._incomingGroup && !this._incomingGroup.visible) this._pendingFrostUniforms = apply; else apply();
+    this.updateFrost();
+  }
+  // Night values for the shader, and figures for the readout: how far up the slopes frost reaches, and the share and
+  // coldest of the vineyard cells in the scene.
+  updateFrost() {
+    const state = this.frostState, f = this._frost; if (!state || !f) return;
+    const night = frostNight(state.minC, state.progress);
+    photoUniforms.frostFloor.value = night.floorC; photoUniforms.frostDepth.value = night.depthM; photoUniforms.frostStrength.value = night.strengthC; photoUniforms.frostDrain.value = night.drainC; photoUniforms.frostLocal.value = night.localC;
+    let below0 = 0, below2 = 0, coldest = Infinity;
+    for (const i of f.vines) { const t = frostTemperature(f.above[i], f.drain[i], night, f.local[i]); if (t < 0) below0++; if (t < -2) below2++; if (t < coldest) coldest = t; }
+    const count = f.vines.length;
+    this.frostSummary = { ...state, night, lineM: frostLineM(night), damageLineM: frostLineM(night, -2), vineCells: count, vinesFrosted: count ? below0 / count : 0, vinesDamaged: count ? below2 / count : 0, coldestVineC: count ? coldest : null };
+    this.onFrostChange?.();
+    this.requestRender();
   }
   runoffCellMetres() { return this.grid > 1 ? Math.sqrt(this.widthM * this.depthM) / (this.grid - 1) : null; }
   // Streams precomputed from the 1 m terrain for the villages in this view, focus village first. Missing ones are
@@ -1127,7 +1205,7 @@ export class AtlasRenderer {
   // features; resolves at once when nothing is being built.
   whenSceneReady() { if (!this._incomingGroup || this._incomingGroup.visible) return Promise.resolve(); return new Promise(resolve => (this._readyWaiters ||= []).push(resolve)); }
   // Everything swaps in one frame: the new scene appears, its rain textures take effect, the old scene is released.
-  finishProgressiveBuild() { if (this._fadingGroup) this.crossfadeFromCurrent(); if (this._incomingGroup) this._incomingGroup.visible = true; this._pendingRainUniforms?.(); this._pendingRainUniforms = null; const waiters = this._readyWaiters || []; this._readyWaiters = []; queueMicrotask(() => waiters.forEach(resolve => resolve())); const labels = this._pendingLabels; this._pendingLabels = null; if (labels && this.labels) { for (const child of [...this.labels.children]) if (child !== labels.holder) child.remove(); labels.holder.style.visibility = ''; this.labelItems = labels.items; this.renderScene(); } if (this._fadingGroup) { this.world.remove(this._fadingGroup); this.disposeObject(this._fadingGroup); this._fadingGroup = null; } this.requestRender(); }
+  finishProgressiveBuild() { if (this._fadingGroup) this.crossfadeFromCurrent(); if (this._incomingGroup) this._incomingGroup.visible = true; this._pendingRainUniforms?.(); this._pendingRainUniforms = null; this._pendingFrostUniforms?.(); this._pendingFrostUniforms = null; const waiters = this._readyWaiters || []; this._readyWaiters = []; queueMicrotask(() => waiters.forEach(resolve => resolve())); const labels = this._pendingLabels; this._pendingLabels = null; if (labels && this.labels) { for (const child of [...this.labels.children]) if (child !== labels.holder) child.remove(); labels.holder.style.visibility = ''; this.labelItems = labels.items; this.renderScene(); } if (this._fadingGroup) { this.world.remove(this._fadingGroup); this.disposeObject(this._fadingGroup); this._fadingGroup = null; } this.requestRender(); }
   disposeObject(object) { object.traverse(child => { child.geometry?.dispose(); for (const m of Array.isArray(child.material) ? child.material : child.material ? [child.material] : []) { if (m.map) { m.map.dispose(); m.map.userData?.renderTarget?.dispose(); } this.retireMaterial(m); } }); }
   // Materials are released after the next frame so their replacements reuse the compiled GPU programs instead of recompiling identical shaders.
   retireMaterial(material) { if (this._retiredMaterials) this._retiredMaterials.push(material); else material.dispose(); }

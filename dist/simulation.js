@@ -180,3 +180,86 @@ export function classAccumulation(receiver, filled, valid, size, fractions, K) {
   for (const i of order) { const to = receiver[i]; if (to < 0) continue; for (let k = 0; k < K; k++) out[to * K + k] += out[i * K + k]; }
   return out;
 }
+
+
+// Frost on a clear, still spring night (radiation frost). The ground loses heat to the open sky, the air touching it
+// cools, and being heavier it slides downhill. Two kinds of cold pool form:
+//  - the valley's cold layer: air from the whole hillside collects on the broad valley floor. By dawn the coldest air
+//    lies there, warming with height up to the top of the layer (a temperature inversion); above it the air cools again
+//    with height as usual. Slopes inside that warmer band (the "thermal belt") escape the frost the flats get.
+//  - small local pools: flat ground and hollows anywhere, hilltop plateaus included, hold a shallow pool of their own
+//    air, a couple of degrees colder than the ground around them.
+// Cold air also streams down gullies and out of combes, so their floors run colder.
+// This is a terrain-only, relative model: it has no weather data, and windy or cloudy nights, or a cold air mass
+// moving in (advection frost), freeze slopes and flats alike.
+export const FROST_FLAT_SLOPE = .03;       // ground flatter than 3% stops cold air, so it collects there
+export const FROST_VALLEY_AREA_M2 = 2e6;   // a valley floor: flat ground with at least 2 km² draining into it
+export const FROST_LOCAL_AREA_M2 = 2e5;    // a local pool: flat ground with at least 20 ha draining into it
+export const FROST_POCKET_M = .5;          // a hollow deeper than this holds its own pool of cold air
+export const FROST_NIGHT = { depthM: 100, strengthC: 7, dropC: 9, drainC: 1.2, localC: 2, localDepthM: 15, lapseCPerM: .0065 };
+// Dawn temperatures on the valley floor: -1 °C wets green shoots with rime, -3 °C kills most opened buds, -6 °C is a
+// severe night.
+export const FROST_PRESETS = [['Light', -1], ['Hard', -3], ['Severe', -6]];
+
+// Per cell, from the height grid and its rain routing (rainRunoff):
+//  above – metres above the valley floor its cold air drains to (0 on the floor);
+//  local – 0–1, how deep it sits in a small local pool (1 on the pool floor or in a hollow, 0 from 15 m above it);
+//  drain – 0–1, how much cold air streams through it from upslope (large for gullies and combe floors).
+// A floor is the first flat, well-fed cell downhill; flatness is judged on the pit-filled surface, so a large basin
+// counts once full. A small hollow (a doline on a plateau, say) holds a local pool of its own, but once full the air
+// spills on downhill, so it and the ground above it are measured against the valley floor further down. Air that leaves the grid is taken to settle at the height of the lowest
+// ground in the grid (5th percentile), so a plateau running off the edge is not mistaken for a valley floor.
+export function coldAirFields(heights, valid, size, cellMetres, routed = rainRunoff(heights, valid, size, cellMetres)) {
+  const n = size * size, { receiver, accumulation, filled } = routed, ok = i => !valid || Boolean(valid[i]);
+  const above = new Float32Array(n), local = new Float32Array(n), drain = new Float32Array(n), flatness = new Float32Array(n);
+  const valley = new Float64Array(n), pool = new Float64Array(n), order = [];
+  for (let i = 0; i < n; i++) {
+    if (!ok(i)) continue;
+    order.push(i);
+    const r = Math.floor(i / size), c = i % size;
+    const at = (rr, cc) => { if (rr < 0 || cc < 0 || rr >= size || cc >= size) return filled[i]; const j = rr * size + cc; return ok(j) ? filled[j] : filled[i]; };
+    flatness[i] = Math.hypot(at(r, c + 1) - at(r, c - 1), at(r + 1, c) - at(r - 1, c)) / (2 * cellMetres);
+  }
+  const sorted = order.map(i => heights[i]).sort((a, b) => a - b), low = sorted.length ? sorted[Math.floor(sorted.length * .05)] : 0;
+  order.sort((a, b) => filled[a] - filled[b]); // downhill first: a cell's receiver is always lower on the filled surface
+  const area = cellMetres * cellMetres, N = FROST_NIGHT;
+  for (const i of order) {
+    const flat = flatness[i] < FROST_FLAT_SLOPE, fed = accumulation[i] * area, to = receiver[i];
+    if (flat && fed >= FROST_VALLEY_AREA_M2) valley[i] = filled[i];
+    else if (to < 0) valley[i] = Math.min(filled[i], low);
+    else valley[i] = valley[to];
+    if (flat && fed >= FROST_LOCAL_AREA_M2) pool[i] = filled[i];
+    else if (to < 0) pool[i] = flat ? filled[i] : -Infinity;
+    else pool[i] = pool[to];
+    const hollow = filled[i] - heights[i] > FROST_POCKET_M;
+    above[i] = Math.max(0, heights[i] - valley[i]);
+    local[i] = hollow ? 1 : Math.max(0, 1 - Math.max(0, heights[i] - pool[i]) / N.localDepthM);
+    drain[i] = Math.min(1, Math.max(0, (Math.log10(Math.max(1, fed)) - 4.5) / 1.5)); // from 3 ha draining through (0) to 100 ha (1)
+  }
+  return { above, local, drain };
+}
+
+// The night so far, for a dawn temperature on the valley floor (minC) and progress from sunset (0) to dawn (1). Cooling
+// is fastest in the evening and slows towards dawn (about with the square root of time); the cold layer deepens and
+// strengthens the same way.
+export function frostNight(minC, progress) {
+  const s = Math.sqrt(Math.min(1, Math.max(0, Number(progress) || 0))), N = FROST_NIGHT;
+  return { floorC: minC + N.dropC * (1 - s), depthM: Math.max(1, N.depthM * s), strengthC: N.strengthC * s, drainC: N.drainC * s, localC: N.localC * s };
+}
+
+// Air temperature near the ground (°C) for a cell's fields (see coldAirFields) on a night from frostNight. Inside the
+// valley's cold layer it warms fastest near the floor; a local pool takes off up to localC, but never makes ground
+// colder than the valley floor.
+export function frostTemperature(above, drain, night, local = 0) {
+  const x = Math.min(1, Math.max(0, above) / night.depthM);
+  const t = night.floorC + night.strengthC * (1 - (1 - x) * (1 - x)) - FROST_NIGHT.lapseCPerM * Math.max(0, above - night.depthM);
+  return Math.max(Math.min(t, night.floorC), t - night.localC * local) - night.drainC * drain;
+}
+
+// How far above the valley floor the 0 °C line reaches (ignoring gullies and local pools): 0 if the floor stays above
+// freezing, Infinity if the whole layer is below it.
+export function frostLineM(night, thresholdC = 0) {
+  if (night.floorC >= thresholdC) return 0;
+  if (night.floorC + night.strengthC <= thresholdC) return Infinity;
+  return night.depthM * (1 - Math.sqrt(1 - (thresholdC - night.floorC) / night.strengthC));
+}

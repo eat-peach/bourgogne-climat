@@ -97,3 +97,38 @@ test('ground types shed different amounts and add up downstream', async () => {
   const acc = classAccumulation(receiver, filled, null, 2, fractions, 2);
   assert.deepEqual([...acc.slice(4, 6)], [1.5, 1.5]);
 });
+
+test('cold air pools on the flats and in hollows; slopes in the thermal belt stay warmer', async () => {
+  const { coldAirFields, frostNight, frostTemperature, frostLineM, FROST_PRESETS } = await import('../dist/simulation.js');
+  // A Côte-like section: a slope falling east from 350 m to 230 m, then a nearly flat plain; one hollow on the slope.
+  const size = 41, cell = 25, heights = [];
+  for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) heights.push(c <= 20 ? 350 - c * 6 : 230 - (c - 20) * .025);
+  const hollow = 20 * size + 8; heights[hollow] -= 15;
+  const { above, local, drain } = coldAirFields(heights, null, size, cell);
+  const plain = 20 * size + 30, mid = 20 * size + 10, top = 20 * size + 1;
+  near(above[plain], 0, 1, 'the plain is the pool floor');
+  near(above[mid], heights[mid] - 229.5, 1, 'mid-slope height above the plain');
+  assert.ok(above[hollow] > 50, 'a hollow up the slope is still high above the valley floor');
+  assert.ok(frostTemperature(above[hollow], 0, frostNight(-3, 1), local[hollow]) < frostTemperature(above[hollow + 1], 0, frostNight(-3, 1), local[hollow + 1]), 'but it holds a colder pool than the slope beside it');
+  assert.equal(local[hollow], 1);
+  assert.equal(local[mid], 0, 'open slope is in no local pool');
+  assert.ok(above[top] > above[mid], 'higher up is further above the floor');
+  for (let i = 0; i < size * size; i++) assert.ok(drain[i] >= 0 && drain[i] <= 1);
+  // Hard frost at dawn: the plain is well below zero, ground 60 m up the slope is above it.
+  const dawn = frostNight(-3, 1);
+  near(frostTemperature(0, 0, dawn), -3, 1e-9, 'floor temperature');
+  assert.ok(frostTemperature(60, 0, dawn) > 0, 'thermal belt stays above freezing');
+  assert.ok(frostTemperature(60, 1, dawn) < frostTemperature(60, 0, dawn), 'cold-air streams run colder');
+  assert.ok(frostTemperature(400, 0, dawn) < frostTemperature(100, 0, dawn), 'above the layer the air cools with height again');
+  near(frostTemperature(frostLineM(dawn), 0, dawn), 0, 1e-9, 'frost line is the 0 °C height');
+  // A flat hilltop far above the valley holds a local pool: colder than the slopes around it, still warmer than the floor.
+  const plateau = frostTemperature(230, 0, dawn, 1), slopeAt = frostTemperature(230, 0, dawn, 0);
+  near(slopeAt - plateau, 2, 1e-9, 'local pool depth');
+  assert.ok(plateau > 0, 'a plateau above the valley layer escapes hard frost');
+  assert.equal(frostTemperature(0, 0, dawn, 1), -3, 'a local pool never undercuts the valley floor');
+  // The night cools from sunset to dawn, and harder presets freeze further up.
+  assert.ok(frostNight(-3, 0).floorC > 0 && frostNight(-3, .5).floorC > dawn.floorC);
+  const lines = FROST_PRESETS.map(([, c]) => frostLineM(frostNight(c, 1)));
+  assert.ok(lines[0] < lines[1] && lines[1] < lines[2], `frost lines ${lines}`);
+  assert.equal(frostLineM(frostNight(-3, 0)), 0, 'no frost at sunset');
+});

@@ -762,7 +762,7 @@ h1,h2,p{margin:0}
 .sim-modes button[aria-selected="true"]{background:var(--wine);color:#fff8ee!important}
 .sim-modes button:not([aria-selected="true"]):hover{color:var(--wine)!important}
 .sim-bar [data-for]{display:none}
-.sim-bar[data-mode="sun"] [data-for="sun"],.sim-bar[data-mode="rain"] [data-for="rain"]{display:flex}
+.sim-bar[data-mode="sun"] [data-for~="sun"],.sim-bar[data-mode="rain"] [data-for~="rain"],.sim-bar[data-mode="frost"] [data-for~="frost"]{display:flex}
 .sim-play{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--wine)!important;color:#fff8ee!important;font-size:12px!important}
 .sim-play:hover{background:var(--wine-dark)!important}
 .sim-transport{display:flex;align-items:center;gap:4px;flex:none}
@@ -1498,3 +1498,21 @@ html.phone-ui .detail-panel.mobile-open .sheet-handle::before{content:'';positio
 
 /* regions without an owner register (the German pages): no owner search, no owner hints */
 html[data-no-owners] .owner-search-wrap,html[data-no-owners] .phone-mode-btn,html[data-no-owners] .fact-ownership:empty{display:none!important}
+/* Sun & rain: Frost mode (a clear, still night: cold air pools on the low ground) */
+.sim-night{--track-a:#3d5a9c;--track-b:#9fb7e6;--thumb:#cfdcf6;--thumb-ring:#3d5a9c}
+.sim-night-line .sim-dusk::before{content:'↓ ';color:#7f93c4}.sim-night-line .sim-dawn::after{content:' ↑';color:var(--gold)}
+.sim-frost-min button[aria-pressed="true"]{background:#3d5a9c;color:#fff!important}
+.sim-frost-min button:not([aria-pressed="true"]):hover{color:#3d5a9c!important}
+.sim-bar[data-mode="frost"] .sim-small{color:#3d5a9c}
+.sim-frost-info{flex:none;width:24px;height:24px;align-items:center;justify-content:center;border:1px solid var(--line)!important;border-radius:50%;font:700 12px var(--sans)!important;color:var(--muted)!important;cursor:help}
+.sim-frost-info:hover{color:#3d5a9c!important;border-color:#3d5a9c!important}
+@media (max-width:760px){.sim-night-line{order:6;flex:1 1 0}.sim-frost-min{order:6}.sim-frost-info{order:6}}
+@container simbar (max-width:620px){.sim-bar[data-mode="frost"] .sim-modes button span{display:none}.sim-bar[data-mode="frost"] .sim-modes button{padding:0 10px}}
+.sim-bar{flex-direction:column;align-items:center}
+.sim-note{pointer-events:auto;max-width:560px;margin:0 0 8px;padding:9px 13px;border-radius:14px;background:#f4f0e8f5;border:1px solid rgba(91,73,56,.25);box-shadow:0 6px 22px #2b211c2e;font-size:12px;line-height:1.45;color:var(--ink)}
+.sim-note[hidden]{display:none}
+.sim-key{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin:0 2px 0 6px}.sim-key-0{background:#fff;box-shadow:0 0 0 1px #8a94a8}.sim-key-2{background:#1f3a9e}
+@container simbar (max-width:760px){.sim-bar[data-mode="frost"] .sim-readout{display:flex}}
+@container simbar (max-width:900px){.sim-bar[data-mode="frost"] .sim-readout .sim-small{display:block;white-space:normal;max-width:220px;line-height:1.25}}
+@container simbar (max-width:760px){.sim-bar[data-mode="frost"] .sim-readout .sim-small{display:none}}
+@container simbar (max-width:900px){.sim-bar[data-mode="frost"] .sim-modes button span,.sim-bar[data-mode="frost"] .sim-speed,.sim-bar[data-mode="frost"] .sim-edge{display:none}.sim-bar[data-mode="frost"] .sim-modes button{padding:0 10px}.sim-night-line{min-width:90px}}
