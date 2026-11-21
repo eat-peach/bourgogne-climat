@@ -34,6 +34,7 @@ Gzipped JSON (`.json.gz`) is shown uncompressed. Build the real files with the s
 | `dist/data` | `navigator` | `#.json` | 376 | [JSON skeleton](dist/data/navigator/_template.json) |
 | `dist/data` | `navigator` | `overview.json` | 1 | [JSON skeleton](dist/data/navigator/overview.json) |
 | `dist/data` | `ownership` | `#.json.gz` | 376 | [JSON skeleton](dist/data/ownership/_template.json) |
+| `dist/data` | `ownership` | `domaines.json` | 1 | [JSON skeleton](dist/data/ownership/domaines.json) |
 | `dist/data` | `ownership` | `manifest.json` | 1 | [JSON skeleton](dist/data/ownership/manifest.json) |
 | `dist/data` | `ownership` | `owner-crus.json.gz` | 1 | [JSON skeleton](dist/data/ownership/owner-crus.json) |
 | `dist/data` | `ownership` | `owners.json.gz` | 1 | [JSON skeleton](dist/data/ownership/owners.json) |

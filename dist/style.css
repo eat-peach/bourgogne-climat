@@ -1016,10 +1016,6 @@ html{touch-action:manipulation}
 .tl-wheel .n{left:50%;top:0;transform:translateX(-50%)}.tl-wheel .s{left:50%;bottom:0;transform:translateX(-50%)}
 .tl-wheel .e{right:0;top:50%;transform:translateY(-50%)}.tl-wheel .w{left:0;top:50%;transform:translateY(-50%)}
 .phone-ui .terroir-legend{left:10px;bottom:calc(76px + env(safe-area-inset-bottom));width:180px}
-/* Sun & rain: Season (sun-hours shading) toggle */
-.sim-bar[data-mode="sun"] .sim-season{display:inline-flex}
-.sim-season{align-items:center;height:26px;padding:0 10px;border:1px solid #d8ccb4;border-radius:13px;background:#fffdf7;color:var(--wine);font:600 11px/1 var(--sans);letter-spacing:.03em;cursor:pointer;margin-left:6px}
-.sim-season[aria-pressed="true"]{background:#f6b54a;border-color:#d9962a;color:#3a2410}
 
 /* geology: legend list and info-panel rows */
 .terroir-legend.is-geology{width:250px;max-height:min(52vh,420px);overflow:auto}
@@ -1513,6 +1509,33 @@ html[data-no-owners] .owner-search-wrap,html[data-no-owners] .phone-mode-btn,htm
 .sim-note[hidden]{display:none}
 .sim-key{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin:0 2px 0 6px}.sim-key-0{background:#fff;box-shadow:0 0 0 1px #8a94a8}.sim-key-2{background:#1f3a9e}
 @container simbar (max-width:760px){.sim-bar[data-mode="frost"] .sim-readout{display:flex}}
-@container simbar (max-width:900px){.sim-bar[data-mode="frost"] .sim-readout .sim-small{display:block;white-space:normal;max-width:220px;line-height:1.25}}
-@container simbar (max-width:760px){.sim-bar[data-mode="frost"] .sim-readout .sim-small{display:none}}
 @container simbar (max-width:900px){.sim-bar[data-mode="frost"] .sim-modes button span,.sim-bar[data-mode="frost"] .sim-speed,.sim-bar[data-mode="frost"] .sim-edge{display:none}.sim-bar[data-mode="frost"] .sim-modes button{padding:0 10px}.sim-night-line{min-width:90px}}
+
+/* Who has vines in a cru (cru panel) */
+.own-bar{display:flex;height:8px;margin:6px 0 4px;border-radius:4px;background:var(--paper-deep);overflow:hidden}
+.own-bar b{display:block;height:100%}
+.own-bar .own-rec{background:var(--wine)}
+.own-bar .own-rep{background:repeating-linear-gradient(135deg,var(--gold) 0 4px,#d2ae72 4px 8px)}
+.own-list{list-style:none;margin:10px 0 4px;padding:0}
+.own-row{display:grid;grid-template-columns:1fr auto;gap:1px 10px;padding:7px 0;border-top:1px solid var(--line)}
+.own-row:first-child{border-top:0}
+.own-name{font:400 15px/1.3 var(--serif);color:var(--ink);min-width:0}
+.own-ha{font:500 12.5px/1.6 var(--sans);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.own-note{grid-column:1/-1;font:11.5px/1.4 var(--sans);color:var(--muted)}
+.own-note a{color:var(--wine)}
+.own-row.is-reported .own-name:before,.own-row.is-declared .own-name:before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:2px;background:var(--gold);vertical-align:1px}
+.own-row.is-recorded .own-name:before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:2px;background:var(--wine);vertical-align:1px}
+.sim-bar[data-mode="frost"] .sim-bar-main{max-width:980px}
+.sim-bar[data-mode="frost"] .sim-small{display:none!important}
+/* nothing in the bar may push past its right edge (the close button used to slide under the move pad) */
+.sim-bar .sim-timeline{min-width:0;flex:1 1 70px}
+/* The info panel's close button stays in reach while the panel scrolls (it used to scroll away with the header) */
+html:not(.phone-ui) .detail-panel:has(.feature-summary) .detail-close{position:sticky;top:11px;right:auto;align-self:flex-end;flex:none;margin:-15px -8px -15px 0;z-index:6;border-radius:50%;background:var(--paper);box-shadow:0 1px 6px #30251d24}
+@container simbar (max-width:620px){.sim-modes button span{display:none}.sim-rainfall{min-width:100px}}
+/* the shading legend's × turns the shading off */
+.terroir-legend{padding-right:30px;width:222px}
+.terroir-legend .tl-close{position:absolute;top:4px;right:5px;width:24px;height:24px;padding:0;border:0;border-radius:50%;background:none;color:var(--muted);font:20px/24px var(--sans);text-align:center;cursor:pointer}
+.terroir-legend .tl-close:hover{background:#7825361a;color:var(--wine)}
+/* cru names on the navigator's local map */
+.nav-label--cru{font-size:7.5px;font-style:italic;fill:#4a3426}
+.nav-label--grand{font-size:8.5px;font-weight:700;font-style:normal;fill:#3a2418}

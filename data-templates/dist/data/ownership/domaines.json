@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "<number>",
+  "checked": "<string>",
+  "about": "<string>",
+  "entities": {
+    "<id>": {
+      "domaine": "<string>",
+      "basis": "<string>",
+      "why": "<string>",
+      "sources": [
+        [
+          "<string>",
+          "…"
+        ],
+        "…"
+      ]
+    },
+    "…": "17 entries in the source file"
+  },
+  "holdings": {}
+}

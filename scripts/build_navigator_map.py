@@ -1,8 +1,8 @@
 """Light map data for the sidebar navigator, drawn in the style of a printed wine map.
 
 From each village scene it keeps, simplified:
-  - the AOC areas by class (grand cru, premier cru, village; regional areas only in the overview), plus premier and
-    grand cru lieux-dits,
+  - the AOC areas by class (grand cru, premier cru, village; regional areas only in the overview), each cru as one
+    outline (its pieces merged), plus premier and grand cru lieux-dits where the AOC layer has no cru of that name,
   - forests,
   - main roads (dual carriageways and motorways as "major", single-carriageway roads as "minor").
 Output
@@ -73,6 +73,48 @@ def simple_rings(value, tol, min_area):
     return rings
 
 
+def dissolved_rings(value, tol, min_area, res=2.0, close_m=8.0):
+    """One outline per cru: its pieces (an AOC area is often delimited lieu-dit by lieu-dit) are drawn on a res-metre
+    grid, gaps narrower than close_m between them are closed, and the outline is traced again, so the navigator shows
+    the cru without the lines between its pieces. Holes are kept. Falls back to the pieces if OpenCV is missing."""
+    try:
+        import cv2, numpy as np
+    except ImportError:
+        return simple_rings(value, tol, min_area)
+    polys = [poly for poly in polygons(value) if poly and ring_area(poly[0]) >= min_area]
+    if not polys: return []
+    if len(polys) == 1: return simple_rings(polys, tol, min_area)
+    xs = [p[0] for poly in polys for p in poly[0]]; ys = [p[1] for poly in polys for p in poly[0]]
+    pad = close_m * 2; x0, y1 = min(xs) - pad, max(ys) + pad
+    w, h = int((max(xs) + pad - x0) / res) + 1, int((y1 - (min(ys) - pad)) / res) + 1
+    if w * h > 25_000_000: return simple_rings(value, tol, min_area)  # too large to draw: keep the pieces
+    img = np.zeros((h, w), np.uint8)
+    px = lambda ring: np.array([[(p[0] - x0) / res, (y1 - p[1]) / res] for p in ring], np.int32)
+    for poly in polys:
+        cv2.fillPoly(img, [px(poly[0])], 255)
+        for hole in poly[1:]: cv2.fillPoly(img, [px(hole)], 0)
+    k = max(3, int(close_m / res) | 1)
+    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    contours, hierarchy = cv2.findContours(img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    rings = []
+    for i, c in enumerate(contours):
+        ring = [[x0 + (q[0][0] + .5) * res, y1 - (q[0][1] + .5) * res] for q in c]
+        if len(ring) < 3: continue
+        ring.append(ring[0])
+        is_hole = hierarchy[0][i][3] >= 0
+        if ring_area(ring) < (min_area * 2 if is_hole else min_area): continue
+        s = simplify(ring, tol)
+        if len(s) >= 4: rings.append([[round(p[0]), round(p[1])] for p in s])
+    return rings
+
+
+def short_name(name, village):
+    """'Vosne-Romanée premier cru Les Suchots' -> 'Les Suchots' (the name a lieu-dit of the same cru carries)."""
+    for prefix in (f'{village} premier cru ', f'{village} Premier Cru '):
+        if name.startswith(prefix): return name[len(prefix):]
+    return name
+
+
 def main(site: Path):
     data = site / 'data'; out_dir = data / 'navigator'; out_dir.mkdir(exist_ok=True)
     villages = json.loads((data / 'index.json').read_text('utf8'))['villages']
@@ -89,13 +131,16 @@ def main(site: Path):
             # the overview keeps regional areas too (they make the broad wine-region bands); the local map does not
             coarse.append(cls)
             if cls == 'regional' or (site.name != 'rhone' and cls not in KEEP_CLASSES): continue
-            rings = simple_rings(p.get('rings'), LOCAL_TOL, 200)
+            rings = dissolved_rings(p.get('rings'), LOCAL_TOL, 200)
             if rings: aoc.append([cls, rings, str(p.get('id') or ''), 'parcels', p.get('name') or ''])
         # premier and grand cru lieux-dits: on the 3D map these carry the class colour where the AOC layer has no
-        # separate premier-cru area (the part inside the AOC, aocSelectionRings, when given)
+        # separate premier-cru area (the part inside the AOC, aocSelectionRings, when given). The navigator stops at
+        # the cru: a lieu-dit whose cru the AOC layer already draws (same name) is left out.
+        crus = {short_name(a[4], v.get('name') or '') for a in aoc if a[0] in ('grand-cru', 'premier-cru')}
         for c in scene.get('climats', []):
             cls = c.get('classification')
             if cls not in ('grand-cru', 'premier-cru'): continue
+            if (c.get('displayName') or c.get('name') or '') in crus: continue
             rings = simple_rings(c.get('aocSelectionRings') or c.get('rings'), LOCAL_TOL, 200)
             if rings: aoc.append([cls, rings, str(c.get('id') or ''), 'climats', c.get('displayName') or c.get('name') or ''])
             coarse.append(cls)

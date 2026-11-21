@@ -1,6 +1,7 @@
 import { AtlasRenderer, CADASTRE_MAX_VIEW_RADIUS_METRES } from './atlas-renderer.js';
 import { CadastreLoader } from './cadastre-loader.js';
 import { OwnershipLoader } from './ownership-loader.js';
+import { entityDomaine, entityLabel, cruOwnerSummary } from './holdings.js';
 import { SceneMosaic, sampleScene } from './scene-mosaic.js';
 import { findWineRegion, groupVillagesByWineRegion, setWineRegions, wineRegionOptions } from './regional-navigation.js';
 import { loadRegion, REGION, regionClass, term } from './region.js';
@@ -128,7 +129,7 @@ function renderFeatureFacts(feature,layer,meta){
 }
 function displayPlaceNameSafe(value){return String(value??'').trim().slice(0,200);}
 
-async function showFeatureFacts(feature,layer,provenance){if(compare&&compareIntercept(feature,layer,provenance))return;if(layer==='cadastre'){selectedFeature={feature,layer,provenance};renderCadastreFacts(feature,provenance);appendOwnershipFacts(feature,provenance,++ownershipRequest);appendParcelContext(feature,provenance);addShareButton($('#feature-card'));addParcelCompareButton($('#feature-card'),provenance);scheduleShareSync();const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();return;}if(!feature){clearFeatureSelection();return;}const p=feature.properties||feature||{}, nested=p.facts||p.rawPropertyFacts||p.raw_property_facts||p.rawProperties?.facts||p.raw?.facts||{}, factsKey=provenance?.factsKey||p.factsKey||nested.factsKey||nested.key, villageId=provenance?.factsVillageId||p.factsVillageId||p.facts_village_id||nested.factsVillageId||nested.villageId||nested.village_id||provenance?.sourceVillageId, request=++featureFactsRequest;selectedFeature={feature,layer,provenance};const payload=factsKey&&villageId?await loadFeatureFacts(villageId):null;if(request!==featureFactsRequest||selectedFeature?.feature!==feature)return;const candidates=factsKey?(payload?.features||[]).filter(row=>row.key===factsKey):[];const meta=candidates.length===1?candidates[0]:null;renderFeatureFacts(feature,layer,meta);appendTerroirFacts(feature,layer,request);appendGeologyFacts(feature,layer,request);addShareButton($('#feature-card'));addCompareButton($('#feature-card'),feature,layer,provenance);scheduleShareSync();const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();const toggle=$('.details-toggle');if(toggle){toggle.textContent='Close info';toggle.hidden=true;toggle.setAttribute('aria-expanded','true');toggle.setAttribute('aria-label','Close info');}}
+async function showFeatureFacts(feature,layer,provenance){if(compare&&compareIntercept(feature,layer,provenance))return;if(layer==='cadastre'){selectedFeature={feature,layer,provenance};renderCadastreFacts(feature,provenance);appendOwnershipFacts(feature,provenance,++ownershipRequest);appendParcelContext(feature,provenance);addShareButton($('#feature-card'));addParcelCompareButton($('#feature-card'),provenance);scheduleShareSync();const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();return;}if(!feature){clearFeatureSelection();return;}const p=feature.properties||feature||{}, nested=p.facts||p.rawPropertyFacts||p.raw_property_facts||p.rawProperties?.facts||p.raw?.facts||{}, factsKey=provenance?.factsKey||p.factsKey||nested.factsKey||nested.key, villageId=provenance?.factsVillageId||p.factsVillageId||p.facts_village_id||nested.factsVillageId||nested.villageId||nested.village_id||provenance?.sourceVillageId, request=++featureFactsRequest;selectedFeature={feature,layer,provenance};const payload=factsKey&&villageId?await loadFeatureFacts(villageId):null;if(request!==featureFactsRequest||selectedFeature?.feature!==feature)return;const candidates=factsKey?(payload?.features||[]).filter(row=>row.key===factsKey):[];const meta=candidates.length===1?candidates[0]:null;renderFeatureFacts(feature,layer,meta);appendCruOwners(feature,layer,request,Number(featureArea(mergeFeatureFacts(feature,meta))?.value)||0);appendTerroirFacts(feature,layer,request);appendGeologyFacts(feature,layer,request);addShareButton($('#feature-card'));addCompareButton($('#feature-card'),feature,layer,provenance);scheduleShareSync();const mobile=matchMedia('(max-width:760px)').matches;if(mobile){$('.detail-panel')?.classList.add('mobile-open');openSheet(feature);}else $('.detail-panel')?.classList.add('drawer-open');window.atlasDrawers?.right?.open();const toggle=$('.details-toggle');if(toggle){toggle.textContent='Close info';toggle.hidden=true;toggle.setAttribute('aria-expanded','true');toggle.setAttribute('aria-label','Close info');}}
 // ---- Terroir: slope, aspect, elevation and modelled sun hours per lieu-dit and AOC area
 // (data/terroir/<village>.json, scripts/build_terroir.py) ----
 const terroirCache=new Map();let terroirMode='off',terroirRedraw=0;
@@ -158,7 +159,9 @@ function terroirTint(feature,layer){const v=terroirVillage(feature,layer);if(!v)
   if(!cached.__data){cached.then(d=>{cached.__data=d||{features:{}};clearTimeout(terroirRedraw);terroirRedraw=setTimeout(()=>{renderer?.drawAocOverlay?.();renderer?.requestRender?.();},60);});return null;}
   const p=feature?.properties||feature||{},f=cached.__data.features?.[`${layer}:${p.id}`];if(!f)return null;
   if(terroirMode==='aspect')return aspectColour(f);const sc=TERROIR_SCALES[terroirMode],val=terroirMode==='slope'?f.slopePct:f.sunHours;return ramp(sc.stops,(val-sc.min)/(sc.max-sc.min));}
-function terroirLegend(){let el=$('#terroir-legend');if(!el){el=document.createElement('div');el.id='terroir-legend';el.className='terroir-legend';$('#canvas-stage')?.append(el);}
+// The legend has a × that turns the shading off (the same as choosing None under Shade by).
+function terroirLegend(){terroirLegendBody();const el=$('#terroir-legend');if(!el||el.hidden)return;const x=document.createElement('button');x.type='button';x.className='tl-close';x.setAttribute('aria-label','Turn off this shading');x.title='Turn off this shading';x.textContent='×';x.addEventListener('click',()=>setTerroirMode('off'));el.prepend(x);}
+function terroirLegendBody(){let el=$('#terroir-legend');if(!el){el=document.createElement('div');el.id='terroir-legend';el.className='terroir-legend';$('#canvas-stage')?.append(el);}
   if(terroirMode==='off'){el.hidden=true;return;}el.hidden=false;
   el.classList.toggle('is-geology',terroirMode==='geology');if(terroirMode==='geology'){el.innerHTML=geologyLegendHtml();return;}
   if(terroirMode==='aspect'){el.innerHTML='<span class="tl-title">Aspect: which way it faces</span><div class="tl-wheel" aria-hidden="true"><i style="background:conic-gradient(from 0deg,hsl(220 80% 55%),hsl(165 80% 50%) 12.5%,hsl(50 85% 55%) 25%,hsl(24 85% 55%) 37.5%,hsl(2 85% 55%) 50%,hsl(330 80% 55%) 62.5%,hsl(282 80% 55%) 75%,hsl(250 80% 55%) 87.5%,hsl(220 80% 55%))"></i><b class="n">N</b><b class="e">E</b><b class="s">S</b><b class="w">W</b></div><small>Paler where the ground is flatter.</small>';return;}
@@ -274,7 +277,11 @@ function cruMatches(query){
 // Legal entities that own parcels (DGFiP personnes morales release, data/ownership/owners.json.gz, built by
 // scripts/build_parcel_ownership.py). The index loads on the first search of three letters or more.
 let ownerIndex=null,ownerList=null;
-function loadOwners(){ownerIndex||=loadOptionalPayload(dataUrl('./data/ownership/owners.json.gz')).then(d=>{ownerList=(d?.owners||[]).map(([name,siren,form,area,vines,communes])=>({name,siren,form,area,vines,communes,key:fold(`${name} ${siren}`)}));if(ownerQuery().length>=3)renderList();return ownerList;});return ownerIndex;}
+// Domaine names for register entities and holdings the register does not show (data/ownership/domaines.json, hand-curated).
+let domainesPromise=null,domaines=null;
+function loadDomaines(){domainesPromise||=fetchJson(dataUrl('./data/ownership/domaines.json')).catch(()=>null).then(d=>domaines=d||{entities:{},holdings:{}});return domainesPromise;}
+const ownerName=o=>entityLabel(domaines,o,displayEntityName);
+function loadOwners(){loadDomaines();ownerIndex||=loadOptionalPayload(dataUrl('./data/ownership/owners.json.gz')).then(d=>{ownerList=(d?.owners||[]).map(([name,siren,form,area,vines,communes])=>({name,siren,form,area,vines,communes,key:fold(`${name} ${siren}`)}));if(ownerQuery().length>=3)renderList();return ownerList;});return ownerIndex;}
 // Owner search has its own bar (#owner-search); while it holds three letters or more its results replace the list.
 // Matches whose name starts with the words come first, then owners with the most vines, then the largest holdings.
 const ownerSearchInput=()=>document.querySelector('#owner-search');
@@ -284,7 +291,7 @@ function renderOwnerResults(){const q=ownerQuery(),owners=ownerMatches(q);ui.lis
 const hectares=m2=>m2>=10000?`${(m2/10000).toFixed(m2>=1e6?0:1)} ha`:`${Math.round(m2)} m²`;
 const ownerParcelCount=o=>Object.values(o.communes).reduce((n,ids)=>n+ids.split(',').length,0);
 const communeVillage=code=>index.villages.find(v=>String(v.id).endsWith(`-${code}`));
-function ownerSummary(o){const n=ownerParcelCount(o),c=Object.keys(o.communes).length;return `${n} parcel${n===1?'':'s'}${o.area?` · ${hectares(o.area)}`:''}${o.vines?` · ${hectares(o.vines)} vines`:''}${c>1?` · ${c} communes`:''}`;} // areas are left out where the region's files have none
+function ownerSummary(o){const n=ownerParcelCount(o),c=Object.keys(o.communes).length,d=entityDomaine(domaines,o.siren);return `${d?`${d.domaine} · `:''}${n} parcel${n===1?'':'s'}${o.area?` · ${hectares(o.area)}`:''}${o.vines?` · ${hectares(o.vines)} vines`:''}${c>1?` · ${c} communes`:''}`;} // areas are left out where the region's files have none
 function ownerGroupHtml(owners,q){if(!owners.length)return '';return `<div class="region-group cru-group owner-group"><div class="region-heading cru-heading"><strong>Owners</strong><small>${owners.length===60?'60+':owners.length}</small><span></span></div><div class="region-villages"><div class="region-villages-inner">${owners.map((o,i)=>`<button type="button" class="village-row owner-row" data-owner="${i}"><strong>${esc(o.name)}</strong><small>${esc(ownerSummary(o))}</small></button>`).join('')}</div></div></div>`;}
 // An owner's card in the index: totals, then the communes where they hold parcels; choosing one outlines them on the map.
 // The open owner card survives list refreshes (the map changing village redraws the list) until Back or a new search.
@@ -399,7 +406,7 @@ window.atlasPhoneUI?.apply();
   {target:pick('#terrain-canvas','.phone-fab[data-fab=info]'),pad:pick(-70,6),title:pick('Click a vineyard','Tap a vineyard'),html:`${pick('Click','Tap')} any lieu-dit or AOC area${pick('',', then ⓘ,')} for its area, elevation, slope, which way it faces, sun hours and the rock beneath.${art.panel}Turn on <b>Cadastral parcels</b> in Layers to open single parcels and see their recorded owners.`},
   {target:'.terroir-control',title:'Shade by geology',sheet:true,html:`<b>Shade by</b> colours the vineyards by slope, aspect, sun hours or <b>geology</b> instead of appellation.${art.shade}Geology lays the BRGM 1:50,000 map over the slopes, with a legend of the rocks in view.`},
   {target:'#layers-toggle',title:'Layers',sheet:true,text:'Lieux-dits, AOC and commune boundaries, cadastral parcels, buildings, roads, woodland and water. Each one switches on or off.'},
-  {target:'#simulate-button',title:'Sun, rain and frost',text:'Watch the sun and shadows move over the hills for any date and hour, see how a storm’s rain runs off the slopes, or play a frosty spring night and see where the cold air pools.'},
+  {target:'#simulate-button',title:'Microclimate: sun, rain and frost',text:'Watch the sun and shadows move over the hills for any date and hour, see how a storm’s rain runs off the slopes, or play a frosty spring night and see where the cold air pools.'},
   {target:pick('.detail-panel.drawer-open .compare-btn','.detail-panel.mobile-open .compare-btn'),title:'Compare two crus',html:`Open a cru or lieu-dit and press <b>Compare</b> (a parcel’s panel has it too). Then search for the second one, or ${pick('click','tap')} it on the map: it can be anywhere in the region.${art.start}<b>×</b> on a name, or a double-${pick('click','tap')}, picks a different one.`},
   {target:null,title:'Reading a comparison',html:`Switch the two small maps between <b>Parcels</b> (contours and parcels), <b>Geology</b> (the rock map) and <b>Overlay</b> (one laid on the other, downhill pointing down).${art.read}<b>Show both</b> outlines them on the 3D map. <b>Save image</b> keeps the whole comparison as one picture.`},
   {target:pick('.viewer-toolbar .toolbar-actions, .viewer-toolbar .share-link-btn, #share-button','.phone-fab[data-fab=save]'),title:'Share and save',text:pick('Copy link: the address keeps the view, the selection, the shading and any comparison, so it opens the same map for someone else. Save image downloads the map as you see it.','Save the map as an image. Share in any panel sends a link that opens the same view, selection, shading and comparison.')},
@@ -550,10 +557,12 @@ function buildRegionalNav(){
       // outer half of edges that no other commune shares stays visible
       const landD=communes.map(c=>ringsD(outer(c))).join('');
       land.replaceChildren(make('path',{d:landD,class:'nav-edge'}),make('path',{d:landD,class:'nav-land-fill'}));
-      forest.replaceChildren();aocLayer.replaceChildren();roads.replaceChildren();labels.replaceChildren();
+      forest.replaceChildren();aocLayer.replaceChildren();roads.replaceChildren();labels.replaceChildren();let cruNames=[];
       if(state.mode==='local'){
         const ids=selected?index.villages.filter(x=>inView(x.bounds2154)).map(x=>x.id):[],seenCru=new Set(),fd=[],major=[],minor=[],byClass=new Map();
-        for(const id of ids){const d=loadLocal(id);if(!d)continue;for(const r of d.forest||[])fd.push(ringD(r));for(const [cls,rings,fid,flayer,fname] of d.aoc||[]){const k=fid?`${flayer}:${fid}`:'';if(k&&seenCru.has(k))continue;if(k)seenCru.add(k);if(!byClass.has(cls))byClass.set(cls,[]);byClass.get(cls).push({d:ringsD(rings),id:fid,layer:flayer,name:fname,village:id});}for(const [kind,line] of d.roads||[]){const p=line.map((q,i)=>`${i?'L':'M'}${sx(q[0]).toFixed(1)},${sy(q[1]).toFixed(1)}`).join('');(kind==='major'?major:minor).push(p);}}
+        // the navigator stops at the cru: a lieu-dit is drawn only where no cru of that name is (a neighbour's file can hold it)
+        const cruShort=n=>String(n||'').replace(/^.*?\bpremier cru\s+/i,''),cruSet=new Set();for(const id of ids)for(const a of navData.get(id)?.aoc||[])if(a[3]==='parcels'&&(a[0]==='grand-cru'||a[0]==='premier-cru'))cruSet.add(cruShort(a[4]));
+        for(const id of ids){const d=loadLocal(id);if(!d)continue;for(const r of d.forest||[])fd.push(ringD(r));for(const [cls,rings,fid,flayer,fname] of d.aoc||[]){if(flayer==='climats'&&cruSet.has(fname))continue;const k=fid?`${flayer}:${fid}`:'';if(k&&seenCru.has(k))continue;if(k)seenCru.add(k);if(!byClass.has(cls))byClass.set(cls,[]);byClass.get(cls).push({d:ringsD(rings),id:fid,layer:flayer,name:fname,village:id});const short=cruShort(fname);if(short&&!/premier cru$/i.test(short)&&(cls==='grand-cru'||cls==='premier-cru'))cruNames.push({cls,name:short,rings});}for(const [kind,line] of d.roads||[]){const p=line.map((q,i)=>`${i?'L':'M'}${sx(q[0]).toFixed(1)},${sy(q[1]).toFixed(1)}`).join('');(kind==='major'?major:minor).push(p);}}
         if(fd.length)forest.append(make('path',{d:fd.join(''),class:'nav-forest-fill'}));
         for(const cls of [...BASE_CLASSES,...[...byClass.keys()].filter(k=>!BASE_CLASSES.includes(k))]){const ds=byClass.get(cls);if(!ds)continue;const colour=!BASE_CLASSES.includes(cls)&&classColour(cls);const group=make('g',{class:`nav-aoc-fill nav-aoc--${cls}`});if(colour){group.style.fill=colour;group.style.fillOpacity='.8';}const clickable=cls!=='village'&&cls!=='regional';
           for(const f of ds){const path=make('path',{d:f.d,'fill-rule':'evenodd'});
@@ -575,7 +584,21 @@ function buildRegionalNav(){
       const label=(x,y,text,cls)=>{const el=make('text',{x:x.toFixed(1),y:y.toFixed(1),class:cls,'text-anchor':'middle'});el.textContent=text;labels.append(el);};
       if(state.mode==='local'){const taken=[];const ordered=[...communes].sort((p,q)=>(villageByCode.get(String(q.code))?.id===selected?.id)-(villageByCode.get(String(p.code))?.id===selected?.id));
         for(const c of ordered){const cb=c.bounds||c.bounds2154,cen=c.centroid||[(+cb[0]+ +cb[2])/2,(+cb[1]+ +cb[3])/2];const x=sx(+cen[0]),vill=villageByCode.get(String(c.code)),isSel=vill&&vill.id===selected?.id,text=vill?.name||c.name||'',y=sy(+cen[1])-(isSel?8:5),w=text.length*(isSel?6.6:5.1),h=isSel?13:11,box={l:x-w/2-2,r:x+w/2+2,t:y-h,b:y+3};
-          if(box.l<2||box.r>W-2||box.t<2||box.b>H-2||(box.r>W-38&&box.t<96)||taken.some(o=>box.l<o.r&&box.r>o.l&&box.t<o.b&&box.b>o.t))continue;taken.push(box);label(x,y,text,isSel?'nav-label nav-label--selected':'nav-label');}}
+          if(box.l<2||box.r>W-2||box.t<2||box.b>H-2||(box.r>W-38&&box.t<96)||taken.some(o=>box.l<o.r&&box.r>o.l&&box.t<o.b&&box.b>o.t))continue;taken.push(box);label(x,y,text,isSel?'nav-label nav-label--selected':'nav-label');}
+        // every grand and premier cru is named, once, grand crus first, then the largest. A name goes where it lies inside
+        // its own cru's shape on screen (tried from the shape's centre outwards); if it cannot, a smaller name sits on the
+        // cru itself. A name is only left out if it would cover another name.
+        const byName=new Map();for(const c of cruNames){const k=displayPlaceName(c.name);const area=c.rings.reduce((a,r)=>{let t=0;for(let i=0,j=r.length-1;i<r.length;j=i++)t+=(+r[j][0])*(+r[i][1])-(+r[i][0])*(+r[j][1]);return a+Math.abs(t/2);},0);const prev=byName.get(k);if(!prev||area>prev.area)byName.set(k,{...c,text:k,area});}
+        const inside=(rings,x,y)=>{let hit=false;for(const r of rings)for(let i=0,j=r.length-1;i<r.length;j=i++){const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)hit=!hit;}return hit;};
+        const crus=[...byName.values()].sort((p,q)=>(p.cls==='grand-cru'?0:1)-(q.cls==='grand-cru'?0:1)||q.area-p.area);
+        for(const c of crus){const grand=c.cls==='grand-cru',text=c.text;let placed=false;for(const k of [1,.82,.7]){if(placed)break;const loose=k<.8;const w=text.length*(grand?5:4.4)*k,h=(grand?10:9)*k;
+          const rings=c.rings.map(r=>r.map(p=>[sx(+p[0]),sy(+p[1])]));let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity,ax=0,ay=0,aa=0;
+          for(const ring of rings)for(let i=0,j=ring.length-1;i<ring.length;j=i++){const [x0,y0]=ring[j],[x1,y1]=ring[i],cr=x0*y1-x1*y0;ax+=(x0+x1)*cr;ay+=(y0+y1)*cr;aa+=cr;if(x1<l)l=x1;if(x1>r)r=x1;if(y1<t)t=y1;if(y1>b)b=y1;}
+          if(!loose&&(r-l<w*.6||b-t<h))continue;
+          const cx=aa?ax/(3*aa):(l+r)/2,cy=aa?ay/(3*aa):(t+b)/2,fits=(x,y)=>(loose?[[x,y-h*.3]]:[[x,y],[x-w*.36,y],[x+w*.36,y],[x-w*.36,y-h*.6],[x+w*.36,y-h*.6],[x,y-h*.6]]).every(([px,py])=>inside(rings,px,py));
+          const tries=[[cx,cy]];for(let gy=0;gy<=8;gy++)for(let gx=0;gx<=8;gx++)tries.push([l+(r-l)*gx/8,t+(b-t)*gy/8]);tries.sort((p,q)=>Math.hypot(p[0]-cx,p[1]-cy)-Math.hypot(q[0]-cx,q[1]-cy));
+          let spot=null;for(const [x,y0] of tries){const y=y0+h*.3,box={l:x-w/2-1,r:x+w/2+1,t:y-h+1,b:y+2};if(box.l<2||box.r>W-2||box.t<2||box.b>H-2||(box.r>W-38&&box.t<96))continue;if(!fits(x,y))continue;if(taken.some(o=>box.l<o.r&&box.r>o.l&&box.t<o.b&&box.b>o.t))continue;spot={x,y,box};break;}
+          if(!spot)continue;placed=true;taken.push(spot.box);label(spot.x,spot.y,text,grand?'nav-label nav-label--cru nav-label--grand':'nav-label nav-label--cru');if(k<1)labels.lastChild.style.fontSize=`${(grand?8.5:7.5)*k}px`;}}}
       else{
         // each wine region's name goes beside its band: left, right, above or below, whichever first clears the other
         // bands, the names already placed and the edges
@@ -730,13 +753,13 @@ function renderCadastreFacts(feature,provenance){
 async function appendOwnershipFacts(feature,provenance,request){
   const card=$('#feature-card');if(!card)return;
   ownershipLoader ||= new OwnershipLoader({fetchManifest:()=>fetchJson(dataUrl('./data/ownership/manifest.json')),fetchPayload:meta=>loadOptionalPayload(dataUrl(meta.path)),maxCache:8});
-  const result=await ownershipLoader.loadForParcel(feature);
+  const [result]=await Promise.all([ownershipLoader.loadForParcel(feature),loadDomaines()]);
   if(request!==ownershipRequest||selectedFeature?.feature!==feature)return;
   const section=card.querySelector('[data-ownership]');if(!section)return;
   section.replaceChildren(element('h4','fact-label','Ownership'));
   const messages={unavailable:'Rights data could not load',unsupported:'No published data for this commune',unknown:'Owner not identified in this public release'};
   if(result.status!=='ok')section.append(element('p','fact-value is-unavailable',messages[result.status]||'Not available'));
-  else for(const row of result.rows){const holder=element('div','fact-holder');holder.append(element('p','fact-value',displayEntityName(row.entityName)||'Recorded legal entity'),element('p','fact-caption',row.rightsCode==='P'?'Recorded owner':row.rightLabel||row.rightsCode||'Recorded right'));section.append(holder);}
+  else for(const row of result.rows){const holder=element('div','fact-holder'),link=entityDomaine(domaines,row.siren),right=row.rightsCode==='P'?'Recorded owner':row.rightLabel||row.rightsCode||'Recorded right';holder.append(element('p','fact-value',link?.domaine||displayEntityName(row.entityName)||'Recorded legal entity'),element('p','fact-caption',link?`${right} · registered as ${displayEntityName(row.entityName)}${link.basis==='likely'?' · probable link':''}`:right));if(link)holder.title=link.why||'';section.append(holder);}
   if(result.meta?.sourceAsOf)section.append(element('p','fact-caption',`As of ${displayRecordDate(result.meta.sourceAsOf)||result.meta.sourceAsOf}`));
   if(result.status==='unknown')section.append(element('p','fact-caption','An absent record does not identify the owner.'));
   const list=card.querySelector('.fact-details-list'),body=card.querySelector('.fact-details-body');
@@ -744,6 +767,38 @@ async function appendOwnershipFacts(feature,provenance,request){
   for(const row of result.rows){detailRow(list,row.entityName||'Legal entity',row.siren?`${/^\d{9}$/.test(row.siren)?'SIREN':'DGFiP identifier'} ${row.siren}`:'Identifier not available');detailRow(list,'Recorded right',[row.rightsCode,row.rightLabel].filter(Boolean).join(' · '));}
   body.append(element('p','fact-caption','This dated public release excludes individuals and certain company types. Recorded rights do not establish current ownership or vineyard operation.'));
   const url=safeUrl(result.meta?.sourceUrl);if(url){const link=element('a','','Legal-entity source ↗');link.href=url;link.target='_blank';link.rel='noopener';card.querySelector('.fact-sources').append(link);}
+}
+
+// ---- Who has vines in a cru ----
+// The cru panel lists the legal entities on record in the cru's parcels (under their domaine's name where a sourced link
+// exists) and any domaines a dated source reports there that the register does not show. The list loads as the panel
+// opens (the owner index downloads once, on the first cru).
+function appendCruOwners(feature,layer,request,cruAreaM2){
+  if((layer!=='parcels'&&layer!=='climats')||document.documentElement.hasAttribute('data-no-owners'))return;
+  const card=$('#feature-card'),section=card?.querySelector('[data-ownership]');if(!section)return;
+  const id=fprops(feature).id,side={layer,id};
+  const run=async()=>{section.classList.remove('is-hint');section.replaceChildren(element('h4','fact-label','Who has vines here'),element('p','fact-value is-unavailable','Loading owners…'));
+    const owners=await compareOwners(side).catch(()=>null);if(request!==featureFactsRequest||selectedFeature?.feature!==feature)return;renderCruOwners(section,owners,id,cruAreaM2);};
+  run();
+}
+function renderCruOwners(section,owners,cruId,cruAreaM2){
+  section.replaceChildren(element('h4','fact-label','Who has vines here'));
+  if(!owners||!(owners.total||cruAreaM2)){section.append(element('p','fact-value is-unavailable',owners?'No cadastral parcels matched to this cru':'Owner data could not load'));return;}
+  const s=cruOwnerSummary(owners,domaines,cruId,displayEntityName,cruAreaM2),pct=x=>`${Math.round(x*100)}%`;
+  const bar=element('div','own-bar');bar.innerHTML=`<b class="own-rec" style="width:${s.recordedShare*100}%"></b><b class="own-rep" style="width:${Math.max(0,s.knownShare-s.recordedShare)*100}%"></b>`;
+  bar.setAttribute('role','img');bar.setAttribute('aria-label',`${pct(s.recordedShare)} on record${s.reportedM2?`, about ${pct(s.knownShare)} with reported holdings`:''}`);
+  const line=element('p','fact-caption own-cover');
+  line.textContent=`${haText(s.recordedM2)} of ${haText(s.totalM2)} on record (${pct(s.recordedShare)})${s.reportedM2?` · about ${haText(s.reportedM2)} more reported by domaines`:''}`;
+  section.append(bar,line);
+  const list=element('ul','own-list'),LIMIT=8;
+  s.rows.forEach((r,i)=>{const li=element('li',`own-row is-${r.kind}`);if(i>=LIMIT)li.hidden=true;
+    const name=element('span','own-name',r.name),ha=element('span','own-ha',`${r.approx?'≈ ':''}${haText(r.areaM2)}`),note=element('span','own-note');
+    if(r.kind==='recorded'){note.textContent=r.registered.length?`On record as ${r.registered.join(' + ')}${r.basis==='likely'?' · probable link':''}`:'On record';if(r.why)li.title=r.why;}
+    else{note.textContent=r.kind==='declared'?'Declared by ':'Reported by ';const src=safeUrl(r.url);if(src){const a=element('a','',`${r.by} ↗`);a.href=src;a.target='_blank';a.rel='noopener';note.append(a);}else note.append(r.by);}
+    li.append(name,ha,note);list.append(li);});
+  section.append(list);
+  if(s.rows.length>LIMIT){const more=element('button','cmp-more',`+ ${s.rows.length-LIMIT} more`);more.type='button';more.addEventListener('click',()=>{list.querySelectorAll('li[hidden]').forEach(li=>li.hidden=false);more.remove();});section.append(more);}
+  section.append(element('p','fact-caption',`The register lists companies only; land held by individuals is withheld${s.reportedM2?`. Reported holdings come from the domaines or their importers, checked ${displayRecordDate(s.checked)||s.checked}, and may include rented vines`:''}.`));
 }
 
 document.addEventListener('change',event=>{
@@ -775,8 +830,9 @@ async function compareOwners(side){await loadOwnerCrus();const oc=ownerCrus;if(!
   if(!ids.length)return {total:0,entities:[]};
   const [byParcel,list]=await Promise.all([parcelOwners(),loadOwners()]),areas=new Map();
   for(const code of [...new Set(ids.map(id=>id.slice(0,5)))]){const m=await cadastreAreas(code);for(const id of ids)if(id.startsWith(code)&&m.has(id))areas.set(id,m.get(id));}
-  const per=new Map();let total=0;for(const id of ids){const a=areas.get(id)||0;total+=a;for(const i of byParcel.get(id)||[]){const e=per.get(i)||{o:list[i],area:0,parcels:0};e.area+=a;e.parcels++;per.set(i,e);}}
-  return {total,entities:[...per.values()].sort((x,y)=>y.area-x.area||x.o.name.localeCompare(y.o.name))};}
+  const per=new Map();let total=0;for(const id of ids){const a=areas.get(id)||0;total+=a;for(const i of byParcel.get(id)||[]){const e=per.get(i)||{o:list[i],area:0,parcels:0,ids:[]};e.area+=a;e.parcels++;e.ids.push(id);per.set(i,e);}}
+  await loadDomaines();
+  return {total,areas,entities:[...per.values()].sort((x,y)=>y.area-x.area||x.o.name.localeCompare(y.o.name))};}
 async function startCompare(feature,layer,provenance){loadCruIndex();closeSunAndRain();const a=await compareSide(feature,layer,provenance);compare={a,b:null,picking:true,flying:false,expanded:{},viewing:'a'};renderCompare();openInfoPanel(feature);requestAnimationFrame(()=>requestAnimationFrame(()=>showBestView(feature,layer,a.terroir)));scheduleShareSync();loadSideOwners(a);}
 async function setCompareB(feature,layer,provenance,villageHint){return setCompareSide(compare?.repick||'b',feature,layer,provenance,villageHint);}
 async function setCompareSide(slot,feature,layer,provenance,villageHint){if(!compare||!feature)return;renderer?.setCompareOutlines?.([]);const other=slot==='a'?compare.b:compare.a;if(sameSide(other,feature,layer)||sameSide(compare[slot],feature,layer)){compare.repick=null;renderCompare();return;}
@@ -842,7 +898,7 @@ function cmpBar(v,max,k){return Number.isFinite(v)&&max>0?`<i class="cmp-bar"><b
 function geoCell(side){const L=geologyLegendData;if(!side.geo?.length||!L)return '<span class="cmp-s">Not mapped</span>';const tot=side.geo.reduce((a,[,p])=>a+p,0)||1;return `<i class="cmp-geo">${side.geo.map(([u,pc])=>`<b style="flex:${pc/tot};background:${esc(L.units[u].colour)}"></b>`).join('')}</i><span class="cmp-s">${side.geo.map(([u,pc])=>`${esc(geologyName(L.units[u]).split(',')[0])} ${pc}%`).join(' · ')}</span>`;}
 function ownersCell(side,other,k){const o=side.owners;if(o===undefined)return '<span class="cmp-s">Loading owners…</span>';if(!o)return '<span class="cmp-s">Owner data unavailable</span>';if(!o.entities.length)return '<span class="cmp-s">No legal-entity owner recorded</span>';
   const otherIds=new Set((other?.owners?.entities||[]).map(e=>e.o.siren||e.o.name)),open=compare.expanded[k],shown=open?o.entities:o.entities.slice(0,4);
-  return `<span class="cmp-s">${o.entities.length} ${o.entities.length===1?'entity':'entities'} · ${haText(o.total)}${side.area?` of ${haText(side.area)}`:''}</span><ul class="cmp-owners">${shown.map(e=>`<li><span>${esc(displayEntityName(e.o.name))}${otherIds.has(e.o.siren||e.o.name)?'<em class="cmp-both">both</em>':''}</span><span>${haText(e.area)}</span></li>`).join('')}</ul>${o.entities.length>4?`<button type="button" class="cmp-more" data-k="${k}">${open?'Show fewer':`+ ${o.entities.length-4} more`}</button>`:''}`;}
+  return `<span class="cmp-s">${o.entities.length} ${o.entities.length===1?'entity':'entities'} · ${haText(o.total)}${side.area?` of ${haText(side.area)}`:''}</span><ul class="cmp-owners">${shown.map(e=>`<li><span>${esc(ownerName(e.o))}${otherIds.has(e.o.siren||e.o.name)?'<em class="cmp-both">both</em>':''}</span><span>${haText(e.area)}</span></li>`).join('')}</ul>${o.entities.length>4?`<button type="button" class="cmp-more" data-k="${k}">${open?'Show fewer':`+ ${o.entities.length-4} more`}</button>`:''}`;}
 function renderCompare(){const card=$('#feature-card');if(!card||!compare)return;card.classList.add('feature-summary','is-compare');$('.detail-panel')?.classList.add('is-compare');const A=compare.a,B=compare.b;
   const picker=k=>`<label class="cmp-chip cmp-chip-${k} is-empty"><b>${k.toUpperCase()}</b><input class="cmp-b-input" type="search" placeholder="${k==='b'&&!B?'Search a cru, or click the map':'Search a cru, or click the map'}" autocomplete="off" aria-label="Search a cru for ${k.toUpperCase()}, or click a lieu-dit on the map"></label>`;
   const chip=(s,k)=>compare.repick===k||(k==='b'&&!s)?picker(k):`<button type="button" class="cmp-chip cmp-chip-${k}" data-fly="${k}" title="Click: show ${esc(s.name)} on the map. Double-click: change it"><b>${k.toUpperCase()}</b><span>${esc(s.name)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/></svg><i class="cmp-x" data-clear="${k}" role="button" tabindex="0" aria-label="Remove ${esc(s.name)} and pick another" title="Remove and pick another">×</i></button>`;
@@ -1106,7 +1162,7 @@ async function saveCompareImage(){if(!compare?.a||!compare?.b)return;const A=com
     else if(r.k==='Direct sun'){val(x1,yy,ta?`${ta.sunHours.toLocaleString('en')} h`:'—');val(x2,yy,tb?`${tb.sunHours.toLocaleString('en')} h`:'—');bar(x1,yy+10,ta?.sunHours,maxSun,'a');bar(x2,yy+10,tb?.sunHours,maxSun,'b');}
     else if(r.k==='Geology'){for(const [side,x,lines] of [[A,x1,geoA],[B,x2,geoB]]){if(side.geo?.length&&L){const tot=side.geo.reduce((a,[,pc])=>a+pc,0)||1;let gx=x;g.save();rr(x,y+14,col,10,5);g.clip();for(const [u,pc] of side.geo){const w=col*pc/tot;g.fillStyle=L.units[u].colour;g.fillRect(gx,y+14,w+.5,10);gx+=w;}g.restore();}g.fillStyle=muted;g.font=`13px ${sans}`;lines.forEach((ln,k)=>g.fillText(ln,x,y+42+k*18));}}
     else if(r.k==='Owners'){for(const [side,other,x,list] of [[A,B,x1,oa],[B,A,x2,ob]]){const o=side.owners,ids=otherIds(other);g.fillStyle=muted;g.font=`12px ${sans}`;g.fillText(o?.entities?.length?`${o.entities.length} entities · ${haText(o.total)}${side.area?` of ${haText(side.area)}`:''}${o.entities.length>5?' · largest 5':''}`:'No legal-entity owner recorded',x,y+24);
-      list.forEach((e,k)=>{const yy2=y+48+k*22,both=ids.has(e.o.siren||e.o.name);g.font=`13px ${sans}`;g.fillStyle=ink;const ha=haText(e.area),haW=g.measureText(ha).width,tagW=both?38:0;g.fillText(fit(displayEntityName(e.o.name),col-haW-tagW-14),x,yy2);if(both){const nw=g.measureText(fit(displayEntityName(e.o.name),col-haW-tagW-14)).width;rr(x+nw+6,yy2-11,32,15,4);g.fillStyle='#f6e3b4';g.fill();g.fillStyle='#6b4a07';g.font=`600 9.5px ${sans}`;g.fillText('both',x+nw+12,yy2);g.font=`13px ${sans}`;}g.fillStyle=muted;g.textAlign='right';g.fillText(ha,x+col,yy2);g.textAlign='start';});
+      list.forEach((e,k)=>{const yy2=y+48+k*22,both=ids.has(e.o.siren||e.o.name);g.font=`13px ${sans}`;g.fillStyle=ink;const ha=haText(e.area),haW=g.measureText(ha).width,tagW=both?38:0;g.fillText(fit(ownerName(e.o),col-haW-tagW-14),x,yy2);if(both){const nw=g.measureText(fit(ownerName(e.o),col-haW-tagW-14)).width;rr(x+nw+6,yy2-11,32,15,4);g.fillStyle='#f6e3b4';g.fill();g.fillStyle='#6b4a07';g.font=`600 9.5px ${sans}`;g.fillText('both',x+nw+12,yy2);g.font=`13px ${sans}`;}g.fillStyle=muted;g.textAlign='right';g.fillText(ha,x+col,yy2);g.textAlign='start';});
 }}
     y+=r.h;}
   g.strokeStyle=line;g.beginPath();g.moveTo(M,y);g.lineTo(W-M,y);g.stroke();
@@ -1121,7 +1177,7 @@ async function saveCompareImage(){if(!compare?.a||!compare?.b)return;const A=com
 function renderHelp(modal){const card=modal?.querySelector('.keyboard-card');if(!card)return;const v=term('village'),phone=document.documentElement.classList.contains('phone-ui')||matchMedia('(pointer:coarse)').matches;
   const tap=phone?'Tap':'Click',tapl=tap.toLowerCase(),row=(k,d)=>`<dt>${k}</dt><dd>${d}</dd>`;
   const sections=[
-    ['Explore',[row(`${tap} a vineyard`,'Area, elevation, slope, which way it faces, hours of sun and the rock beneath'),row('Parcels',`Turn on Cadastral parcels in Layers, then ${tapl} one for its cru and recorded owners`),row('Shade by','Colour the vineyards by appellation, slope, aspect, sun hours or geology'),row('Sun &amp; rain','Sun and shadows for any date and hour, how a storm runs off the slopes, and where frost settles on a clear spring night'),row('Search',`${v.charAt(0).toUpperCase()+v.slice(1)}s and crus, or owners (domaines, GFA, SCI…) and the crus they hold`)]],
+    ['Explore',[row(`${tap} a vineyard`,'Area, elevation, slope, which way it faces, hours of sun and the rock beneath'),row('Parcels',`Turn on Cadastral parcels in Layers, then ${tapl} one for its cru and recorded owners`),row('Shade by','Colour the vineyards by appellation, slope, aspect, sun hours or geology'),row('Microclimate','Sun and shadows for any date and hour, how a storm runs off the slopes, and where frost settles on a clear spring night'),row('Search',`${v.charAt(0).toUpperCase()+v.slice(1)}s and crus, or owners (domaines, GFA, SCI…) and the crus they hold`)]],
     ['Compare two crus',[row('Compare',`In a cru’s panel, or a parcel’s; then search or ${tapl} the second one, anywhere in the region`),row('Show both','Both outlined on the 3D map; when far apart, Show A / Show B jumps between them'),row('Parcels · Geology · Overlay','Same-scale maps; Overlay lays one on the other, each turned so downhill points down'),row('Down the slope','Elevation from the top of each cru to the bottom, with the rock underneath'),row('× on a name','Pick a different cru (or double-click the name)')]],
     ['Share and save',[row('Copy link · Share','The address keeps the view, the selection, the shading and any comparison'),row('Save image','The map as you see it, or the comparison as one picture')]]];
   const keys=phone?[row('One finger','Drag to move the map'),row('Two fingers','Pinch to zoom, twist to turn, slide up or down to tilt'),row('Tap','Select a vineyard or parcel'),row('Info sheet','Drag its handle up for everything, down for the map')]

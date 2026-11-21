@@ -1,4 +1,4 @@
-// Sun & rain bar, docked above the map controls. Three modes share it:
+// Microclimate bar (sun, rain and frost), docked above the map controls. Three modes share it:
 //  Sun   – a date slider and a time-of-day timeline light the terrain; ▶ plays the day.
 //  Rain  – a rainfall slider sets the storm; rain falls, and the part that runs off flows down the slopes; ▶ plays the storm.
 //  Frost – a clear, still night from sunset to dawn: cold air drains off the slopes and pools on the flats and in
@@ -49,11 +49,11 @@ export function initSimulation(renderer, button) {
   bar.className = 'sim-bar';
   bar.hidden = true;
   bar.setAttribute('role', 'region');
-  bar.setAttribute('aria-label', 'Sun, rain and frost');
+  bar.setAttribute('aria-label', 'Microclimate: sun, rain and frost');
   bar.innerHTML = `<div class="sim-bar-main">
 <div class="sim-modes" role="tablist" aria-label="Simulation"><button type="button" role="tab" data-mode="sun">${ICON.sun}<span>Sun</span></button><button type="button" role="tab" data-mode="rain">${ICON.rain}<span>Rain</span></button><button type="button" role="tab" data-mode="frost">${ICON.frost}<span>Frost</span></button></div>
 <label class="sim-date-field" data-for="sun"><span class="sim-field-label sim-date-text"></span><input type="range" class="sim-day sim-range" min="1" max="365" step="1" aria-label="Date" /></label>
-<div class="sim-transport"><button type="button" class="sim-play" aria-label="Play">▶</button><button type="button" class="sim-speed" title="Playback speed: click to change"></button><button type="button" class="sim-season" data-for="sun" aria-pressed="false" title="Total direct sun over the growing season (1 April to 30 September), shaded per lieu-dit. A clear-sky model.">Season</button></div>
+<div class="sim-transport"><button type="button" class="sim-play" aria-label="Play">▶</button><button type="button" class="sim-speed" title="Playback speed: click to change"></button></div>
 <div class="sim-timeline" data-for="sun"><span class="sim-edge sim-rise" title="Sunrise"></span><input type="range" class="sim-time sim-range" aria-label="Time of day in France" step="1" /><span class="sim-edge sim-set" title="Sunset"></span></div>
 <div class="sim-rainfall" data-for="rain"><input type="range" class="sim-rain-mm sim-range" min="0" max="${RAIN_MAX}" step="5" aria-label="Rainfall in one storm, millimetres" /><div class="sim-ticks">${RAIN_PRESETS.map(([name, mm]) => `<button type="button" data-mm="${mm}" style="left:${mm / RAIN_MAX * 100}%" title="${name}">${mm}</button>`).join('')}</div></div>
 <div class="sim-duration" data-for="rain" role="group" aria-label="Storm length">${DURATIONS.map(h => `<button type="button" data-hours="${h}" title="All the rain falls in ${h === 1 ? 'one hour' : `${h} hours`}">${h} h</button>`).join('')}</div>
@@ -61,14 +61,9 @@ export function initSimulation(renderer, button) {
 <div class="sim-duration sim-frost-min" data-for="frost" role="group" aria-label="Dawn temperature on the valley floor">${FROST_PRESETS.map(([name, c]) => `<button type="button" data-min="${c}" title="${name} frost: ${String(c).replace('-', '−')} °C at dawn on the valley floor">${String(c).replace('-', '−')}°</button>`).join('')}</div>
 <button type="button" class="sim-frost-info" data-for="frost" aria-label="About the frost model" title="A clear, still spring night (radiation frost). Cold air slides off the slopes and pools on the flats and in hollows, so the low ground freezes first while the mid-slope stays warmer. Terrain only, with no weather data: windy or cloudy nights, or a cold air mass moving in, freeze slopes and flats alike. White line: 0 °C. Blue line: −2 °C, where opened buds are killed.">?</button>
 <output class="sim-readout" aria-live="off"><b class="sim-big"></b><span class="sim-small"></span></output>
-<button type="button" class="sim-close" aria-label="Close sun and rain">×</button></div>`;
+<button type="button" class="sim-close" aria-label="Close microclimate">×</button></div>`;
   host.append(bar);
   const $ = sel => bar.querySelector(sel);
-  // Season: shade every lieu-dit by its modelled direct-sun hours over the growing season (app.js terroir shading)
-  const season = bar.querySelector('.sim-season');
-  const syncSeason = () => season.setAttribute('aria-pressed', String(document.querySelector('input[name="terroir-mode"]:checked')?.value === 'sun'));
-  season.addEventListener('click', async () => { const on = season.getAttribute('aria-pressed') !== 'true'; await window.atlasTerroir?.setMode(on ? 'sun' : 'off'); syncSeason(); });
-  document.addEventListener('change', e => { if (e.target?.name === 'terroir-mode') syncSeason(); });
   const time = $('.sim-time'), day = $('.sim-day'), rain = $('.sim-rain-mm'), nightInput = $('.sim-night');
   // The frost night (20 April): from its sunset to the next morning's sunrise, in minutes after midnight of the date.
   const nightSpan = () => { const a = sunTimes(state.year, FROST_DAY, latitude, longitude), b = sunTimes(state.year, FROST_DAY + 1, latitude, longitude); return { dusk: a ? a.set : 1260, dawn: (b ? b.rise : 360) + 1440 }; };
@@ -80,7 +75,7 @@ export function initSimulation(renderer, button) {
     // The big line stays short (it is all a phone shows): the time and the valley-floor temperature.
     $('.sim-big').textContent = f ? `${t} · ${fmtC(f.night.floorC)}` : t;
     const reach = f?.lineM === Infinity ? 'frost over all low ground' : f?.lineM > 0 ? `frost to ${Math.round(f.lineM)} m up` : 'no frost yet';
-    $('.sim-small').textContent = f ? `On the flats · ${reach}${f.vineCells ? ` · ${pct(f.vinesDamaged)} of vines below −2 °C` : ''}` : 'Mapping the cold air…';
+    $('.sim-small').textContent = ''; // the details are in the readout's tooltip
     bar.querySelector('.sim-readout').title = f ? `Valley floor ${fmtC(f.night.floorC)}; ${reach}${f.vineCells ? `; vines below 0 °C: ${pct(f.vinesFrosted)}, below −2 °C: ${pct(f.vinesDamaged)}, coldest ${fmtC(f.coldestVineC)}` : ''}` : '';
     nightInput.setAttribute('aria-valuetext', `${t}, ${f ? `${fmtC(f.night.floorC)} on the valley floor` : ''}`);
   };
