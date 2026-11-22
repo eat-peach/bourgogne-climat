@@ -355,7 +355,7 @@ export function buildMosaicScene({ bounds, sources = [], backgroundSources = [],
     output.textureTiles.push({ url: resolveUrl(url), fallbackUrl: avif && jpeg ? resolveUrl(jpeg) : null, bounds: source.bounds, sourceId: source.id || source.entry?.id || source.scene?.id });
   }
   // Sharp photos for close views (a region's data/photo-tiles/): the tiles under a small assembled view are drawn over
-  // the village photos, nearest the middle first, at most DETAIL_TILE_LIMIT. Optional, so a missing one shows the
+  // the village photos, nearest the middle first, at most detailTiles.limit (else DETAIL_TILE_LIMIT). Optional, so a missing one shows the
   // village photo beneath.
   if (detailTiles?.tiles?.length && viewport) {
     const T = Number(detailTiles.tileSize) || 500, span = Math.max(viewport[2] - viewport[0], viewport[3] - viewport[1]);
@@ -364,7 +364,7 @@ export function buildMosaicScene({ bounds, sources = [], backgroundSources = [],
       for (let x = Math.floor(viewport[0] / T); x < Math.ceil(viewport[2] / T); x++) for (let y = Math.floor(viewport[1] / T); y < Math.ceil(viewport[3] / T); y++)
         if (have.has(`${x}_${y}`)) near.push({ x, y, d: Math.hypot((x + .5) * T - cx, (y + .5) * T - cy) });
       near.sort((a, b) => a.d - b.d);
-      for (const { x, y } of near.slice(0, DETAIL_TILE_LIMIT).reverse())  // farthest first, so the middle paints last
+      for (const { x, y } of near.slice(0, Number(detailTiles.limit) || DETAIL_TILE_LIMIT).reverse())  // farthest first, so the middle paints last
         output.textureTiles.push({ url: resolveUrl(String(detailTiles.url).replace('{x}', x).replace('{y}', y)), bounds: [x * T, y * T, (x + 1) * T, (y + 1) * T], sourceId: `detail:${x}_${y}`, optional: true, detail: true });
     }
   }

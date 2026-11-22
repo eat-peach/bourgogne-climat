@@ -21,10 +21,11 @@ test('atlas renderer is valid JavaScript without importing WebGL dependencies', 
   execFileSync(process.execPath, ['--check', rendererPath], { stdio: 'pipe' });
 });
 
-test('terrain keeps bright neutral lighting and strengthens only the aerial photo colours', () => {
-  assert.match(source, /LIGHT_INTENSITY = 1\.8 \* \.85;\s+const BASE_GAMMA = 2 \*\* \.2;/);
+test('terrain has soft daylight and grades only the aerial photo colours', () => {
+  assert.match(source, /LIGHT_INTENSITY = 1\.8 \* \.85;\s+const BASE_GAMMA = 2 \*\* -\.08;/);
   assert.match(source, /new THREE\.HemisphereLight\(0xffffff, 0xb4afa6, LIGHT_INTENSITY\)/);
-  assert.match(source, /DISPLAY_DEFAULTS = Object\.freeze\(\{ brightness: 1, lightness: 0, saturation: 1\.7 \}\)/);
+  assert.match(source, /DISPLAY_DEFAULTS = Object\.freeze\(\{ brightness: 1, lightness: 0, saturation: 1\.65 \}\)/);
+  assert.match(source, /DAY_SUN = \{ azimuth: 200, elevation: 40 \}/); // a soft default sun shades the relief
   assert.match(source, /material\.onBeforeCompile = saturatePhotoTexture/);
   assert.match(source, /#include <map_fragment>\s+#ifdef USE_MAP/);
   assert.doesNotMatch(source, /lightTrial|get\('light'\)/);

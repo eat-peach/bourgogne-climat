@@ -21,11 +21,11 @@ const SMALL_DEVICE = typeof window !== 'undefined' && (window.matchMedia?.('(max
 const IMAGE_CACHE_LIMIT = SMALL_DEVICE ? 14 : 48;
 // Aerial photos look flat under the map's bright, neutral lights, so their colours are strengthened in the terrain shader.
 // Viewers can change brightness, lightness and saturation in Display settings, relative to the default look below.
-export const DISPLAY_DEFAULTS = Object.freeze({ brightness: 1, lightness: 0, saturation: 1.7 });
+export const DISPLAY_DEFAULTS = Object.freeze({ brightness: 1, lightness: 0, saturation: 1.65 });
 export const DISPLAY_LIMITS = Object.freeze({ brightness: [.5, 1.5], lightness: [-.5, .5], saturation: [0, 3] });
 // The default look: lights at 85% of full strength and photo tones slightly deepened, shown to viewers as 100% and 0.
 const LIGHT_INTENSITY = 1.8 * .85;
-const BASE_GAMMA = 2 ** .2;
+const BASE_GAMMA = 2 ** -.08;
 // Sun & rain: sunlight colours by height above the horizon, and the runoff network drawn in three widths by the area
 // that drains through each cell.
 const SUN_LOW = new THREE.Color(0xffa45c), SUN_HIGH = new THREE.Color(0xfff3e0), SKY_NIGHT = new THREE.Color(0x7d90bb), WHITE = new THREE.Color(0xffffff);
@@ -39,6 +39,18 @@ const FROST_SKY = new THREE.Color(0xb9c6e4), BACKGROUND_FROST = new THREE.Color(
 // second (sped up for the eye, not to scale).
 const WATER_COLOUR = 0x2f86e8, WATER_HIGHLIGHT = 0xe2f4ff, WATER_MIN_PEAK = .25, WATER_WIDTH = 9, WATER_MIN_PX = 1.3, WATER_SPEED = 160, WATER_SPACING = 220, WATER_MAX_RAIN_MM = 150;
 const BACKGROUND_RAIN = new THREE.Color(0xaeb1b2), LIGHT_RAIN = new THREE.Color(0xe3e8ee);
+// Without the Microclimate sun, the photo map is lit as on a clear late morning: a soft sun from the south-south-west
+// (no cast shadows; the photo has its own) shades the relief, and the far distance fades into a bright, warm daylight
+// haze rather than the darker paper beige. The atlas (drawn map) mode keeps the paper.
+const DAY_SUN = { azimuth: 200, elevation: 40 }, SUN_DAY = new THREE.Color(0xffe4bd), SKY_DAY = new THREE.Color(0xfff7ec), BACKGROUND_SKY = new THREE.Color(0xe9e5dc);
+// Once the map has loaded, a sky dome fades in around the camera: soft blue overhead, pale mist at the horizon, and the
+// distant land fades into the same mist. While loading, the plain warm background shows, so nothing jumps to blue.
+const SKY_TOP = new THREE.Color(0x3f8fe0), SKY_MIST = new THREE.Color(0xc9def0), SKY_FADE_MS = 1100;
+const SKY_VERTEX_SHADER = `varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const SKY_FRAGMENT_SHADER = `uniform vec3 top; uniform vec3 mist; uniform vec3 base; uniform float reveal; varying vec3 vDir;
+  void main() { float h = normalize(vDir).y; vec3 sky = mix(mist, top, smoothstep(.015, .28, h)); gl_FragColor = vec4(mix(base, sky, reveal), 1.0);
+  #include <colorspace_fragment>
+  }`; // the same output colour conversion as the land, so mist on the land and in the sky match
 // Falling rain: thin streaks in a box that follows the view; more of them show the harder it rains.
 const RAIN_STREAKS = 6000, RAIN_FALL_SECONDS = 1.1;
 const RAIN_VERTEX_SHADER = `
@@ -98,9 +110,13 @@ const WATER_VERTEX_SHADER = `
     vAlong = along; vSide = across; vSteep = steep; vStrength = 0.; viewDepth = 0.;
     if (peak < ${WATER_MIN_PEAK.toFixed(2)} || arrive > front + .001) { gl_Position = vec4(2., 2., 2., 1.); return; }
     vStrength = clamp(log(peak / ${WATER_MIN_PEAK.toFixed(2)}) / log(10.) / 2., 0., 1.);
-    viewDepth = -(modelViewMatrix * vec4(position, 1.0)).z;
-    vec4 current = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    vec4 following = projectionMatrix * modelViewMatrix * vec4(next, 1.0);
+    // Pulled 0.6% of the way towards the camera: the line stays where it is on screen (a point slid along its own
+    // sight line projects to the same pixel), but steep ground bulging above a straight segment no longer hides it.
+    vec4 mvCurrent = modelViewMatrix * vec4(position, 1.0), mvFollowing = modelViewMatrix * vec4(next, 1.0);
+    mvCurrent.xyz *= 0.994; mvFollowing.xyz *= 0.994;
+    viewDepth = -mvCurrent.z;
+    vec4 current = projectionMatrix * mvCurrent;
+    vec4 following = projectionMatrix * mvFollowing;
     vec2 a = current.xy / max(current.w, 0.00001);
     vec2 b = following.xy / max(following.w, 0.00001);
     vec2 delta = (b - a) * resolution;
@@ -157,7 +173,7 @@ const WATER_FRAGMENT_SHADER = `
 `;
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const blankRainTexture = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; return t; };
-const photoUniforms = { photoSaturation: { value: DISPLAY_DEFAULTS.saturation }, photoGamma: { value: BASE_GAMMA }, sunShade: { value: 0 },
+const photoUniforms = { photoSaturation: { value: DISPLAY_DEFAULTS.saturation }, photoGamma: { value: BASE_GAMMA }, photoContrast: { value: .55 }, photoLeaf: { value: .85 }, photoExposure: { value: 1.3 }, photoDehaze: { value: .015 }, sunShade: { value: 0 },
   // Rain on the ground (see rebuildRunoff): rainOn switches it on; soak, film and pond run 0–1 with the storm; front is how
   // far down the slopes the water has travelled (0–1 of the longest travel time); the textures hold the per-cell fields.
   rainOn: { value: 0 }, rainTime: { value: 0 }, rainSoak: { value: 0 }, rainFilm: { value: 0 }, rainPond: { value: 0 }, rainFront: { value: 1 }, rainGrid: { value: 1 }, rainArrivalScale: { value: 1 }, rainTexA: { value: blankRainTexture() }, rainTexB: { value: blankRainTexture() },
@@ -174,6 +190,10 @@ varying vec2 vRainPos;
   vGridUv = gridUv; vRainPos = position.xz;`);
   shader.fragmentShader = `uniform float photoSaturation;
 uniform float photoGamma;
+uniform float photoContrast;
+uniform float photoLeaf;
+uniform float photoExposure;
+uniform float photoDehaze;
 uniform float sunShade;
 uniform float rainOn;
 uniform float rainTime;
@@ -200,7 +220,15 @@ float rainHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.54
 float rainNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(rainHash(i), rainHash(i + vec2(1., 0.)), f.x), mix(rainHash(i + vec2(0., 1.)), rainHash(i + vec2(1., 1.)), f.x), f.y); }
 ` + shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
 #ifdef USE_MAP
+  // dehaze, as in a raw editor: survey photos carry a pale veil of air light, so a little of it is taken off first,
+  // which deepens the darks and brings back colour and local contrast
+  diffuseColor.rgb = max(diffuseColor.rgb - photoDehaze, 0.) / (1. - photoDehaze);
   diffuseColor.rgb = pow(max(mix(vec3(dot(diffuseColor.rgb, vec3(.2126, .7152, .0722))), diffuseColor.rgb, photoSaturation), 0.), vec3(photoGamma));
+  // a gentle S-curve: aerial photos are flat and hazy, and this gives them the clearer look of ground seen in daylight
+  { vec3 c = clamp(diffuseColor.rgb, 0., 1.); diffuseColor.rgb = mix(c, c * c * (3. - 2. * c), photoContrast); }
+  // daylight: leaves (green above red and blue) turn fresher and more yellow-green, as vines and grass look in the sun,
+  // and the whole photo is lifted a little, since survey flights are exposed for haze
+  { vec3 c = diffuseColor.rgb; float leaf = clamp((c.g / max(max(c.r, c.b), .002) - 1.) * 3., 0., 1.); diffuseColor.rgb = mix(c, c * vec3(1.04, 1.32, .78), leaf * photoLeaf) * photoExposure; }
 #endif`).replace('#include <opaque_fragment>', `if (rainOn > 0.) {
     vec2 rainUv = vec2(vGridUv.x, 1. - vGridUv.y);
     vec4 fieldA = texture2D(rainTexA, rainUv), fieldB = texture2D(rainTexB, rainUv);
@@ -274,9 +302,13 @@ const SCREEN_LINE_VERTEX_SHADER = `
   uniform float linewidth;
   varying float viewDepth;
   void main() {
-    viewDepth = -(modelViewMatrix * vec4(position, 1.0)).z;
-    vec4 current = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    vec4 following = projectionMatrix * modelViewMatrix * vec4(next, 1.0);
+    // Pulled 0.6% of the way towards the camera: the line stays where it is on screen (a point slid along its own
+    // sight line projects to the same pixel), but steep ground bulging above a straight segment no longer hides it.
+    vec4 mvCurrent = modelViewMatrix * vec4(position, 1.0), mvFollowing = modelViewMatrix * vec4(next, 1.0);
+    mvCurrent.xyz *= 0.994; mvFollowing.xyz *= 0.994;
+    viewDepth = -mvCurrent.z;
+    vec4 current = projectionMatrix * mvCurrent;
+    vec4 following = projectionMatrix * mvFollowing;
     vec2 a = current.xy / max(current.w, 0.00001);
     vec2 b = following.xy / max(following.w, 0.00001);
     vec2 delta = (b - a) * resolution;
@@ -422,6 +454,7 @@ export function labelCandidates(scene) {
   const aocParts = (scene?.parcels || []).flatMap(feature => partsOf(feature).filter(part => part.ring.length > 2).map(part => ({ ...part, box: ringBox(part.ring) })));
   const inAoc = point => { const key = `${point[0]},${point[1]}`; if (IN_AOC_CACHE.has(key)) return true; const [x, y] = point, inside = aocParts.some(part => x >= part.box[0] && x <= part.box[2] && y >= part.box[1] && y <= part.box[3] && insideRing(x, y, part.ring) && !(part.holes || []).some(hole => insideRing(x, y, hole))); if (inside) { if (IN_AOC_CACHE.size > 50000) IN_AOC_CACHE.clear(); IN_AOC_CACHE.add(key); } return inside; };
   const consider = (feature, layer, tier, name, radius = 1200) => {
+    if (props(feature).noLabel) return; // a region can leave an area unlabelled (the Mosel's land outside any Einzellage)
     const text = labelName(name); if (!text) return;
     const anchor = labelAnchor(feature); if (!anchor) return;
     const fold = foldLabel(text);
@@ -450,10 +483,10 @@ export class AtlasRenderer {
     labels?.addEventListener('wheel', event => { event.preventDefault(); canvas.dispatchEvent(new WheelEvent('wheel', event)); }, { passive: false });
     if (!canvas) throw new Error('AtlasRenderer requires a canvas');
     this.canvas = canvas; this.container = container || canvas.parentElement || document.body; this.labels = labels; this.onSelect = onSelect; this.onError = onError; this.onViewChange = onViewChange;
-    this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xd9d0c3); this.scene.fog = new THREE.Fog(0xd9d0c3, 1, 2); this.hazeUniforms = { hazeNear: { value: 1 }, hazeFar: { value: 2 }, hazeColor: { value: this.scene.fog.color } }; this.camera = new THREE.PerspectiveCamera(42, 1, .1, 1000);
+    this.scene = new THREE.Scene(); this.sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({ uniforms: { top: { value: SKY_TOP.clone() }, mist: { value: SKY_MIST.clone() }, base: { value: BACKGROUND_SKY.clone() }, reveal: { value: 0 } }, vertexShader: SKY_VERTEX_SHADER, fragmentShader: SKY_FRAGMENT_SHADER, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false })); this.sky.renderOrder = -1000; this.sky.frustumCulled = false; this.sky.visible = false; this.skyWanted = false; this.skyStart = 0; this.scene.add(this.sky); this.scene.background = BACKGROUND_SKY.clone(); this.scene.fog = new THREE.Fog(BACKGROUND_SKY.getHex(), 1, 2); /* the daylight haze from the first frame, so the map does not change colour once it has loaded */ this.hazeUniforms = { hazeNear: { value: 1 }, hazeFar: { value: 2 }, hazeColor: { value: this.scene.fog.color } }; this.camera = new THREE.PerspectiveCamera(42, 1, .1, 1000);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' }); this.renderer.outputColorSpace = THREE.SRGBColorSpace; this.renderer.shadowMap.enabled = false; if (this.renderer.debug) this.renderer.debug.checkShaderErrors = /[?&]debug\b/.test(globalThis.location?.search || ''); this._retiredMaterials = [];
     this.controls = new OrbitControls(this.camera, canvas); this.controls.enableDamping = true; this.controls.zoomToCursor = true; /* the wheel zooms toward the point under the cursor, as in web maps */ this.controls.minDistance = 3; this.controls.maxDistance = 900; this.controls.maxPolarAngle = Math.PI / 2.02; this.controls.minAzimuthAngle = -Infinity; this.controls.maxAzimuthAngle = Infinity; this.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE; this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE; this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY; this.controls.touches.ONE = THREE.TOUCH.ROTATE; this.controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
-    this.world = new THREE.Group(); this.scene.add(this.world); this.layers = {}; this.featureIndex = []; this.sceneJSON = null; this.indexVillage = null; this.cadastralParcels = []; this.cadastralMeta = {}; this._cadastreEnabled = true; this.exaggeration = 3; this.mode = 'aerial'; this.interaction = 'rotate'; this.aocOpacity = .3; this.classificationVisibility = {}; this.pointerDown = null; this.selectedFeature = null; this.selectionOverlay = null; this.disposed = false; this.pendingViewChange = false; this._viewTimer = 0; this._renderFrame = 0; this._panAnimation = null; this._panViewDirty = false; this.imageCache = new Map();
+    this.world = new THREE.Group(); this.scene.add(this.world); this.layers = {}; this.featureIndex = []; this.sceneJSON = null; this.indexVillage = null; this.cadastralParcels = []; this.cadastralMeta = {}; this._cadastreEnabled = true; this.exaggeration = 3; this.mode = 'aerial'; this.interaction = 'rotate'; this.aocOpacity = .2; this.classificationVisibility = {}; this.pointerDown = null; this.selectedFeature = null; this.selectionOverlay = null; this.disposed = false; this.pendingViewChange = false; this._viewTimer = 0; this._renderFrame = 0; this._panAnimation = null; this._panViewDirty = false; this.imageCache = new Map();
     this.raycaster = new THREE.Raycaster(); this.pointer = new THREE.Vector2(); this.light = new THREE.HemisphereLight(0xffffff, 0xb4afa6, LIGHT_INTENSITY); this.scene.add(this.light); this.sunLight = new THREE.DirectionalLight(0xffffff, 0); this.sunLight.castShadow = true; /* soft, blurred shadow edges: hard ones show the terrain's 65–110 m triangles as stair steps that jump as the sun moves */ this.renderer.shadowMap.type = THREE.VSMShadowMap; this.sunLight.shadow.mapSize.set(2048, 2048); this.sunLight.shadow.radius = 5; this.sunLight.shadow.blurSamples = 16; this.sunLight.shadow.bias = -.0004; this.scene.add(this.sunLight, this.sunLight.target); this.sunState = null; this.runoffState = null; this.rain = null;
     this._cadastreDeferralEnabled = true; this._cadastreLodTimer = 0; this._cadastreLodGeneration = 0; this._cadastrePendingBucket = null; this._cadastreCandidateSignature = null;
     this._onPointerDown = e => { if (e.button !== 0) return; this.cancelPanAnimation('pointer'); this.pointerDown = { x: e.clientX, y: e.clientY, pointerId: e.pointerId }; }; this._onPointerUp = e => { const down = this.pointerDown; this.pointerDown = null; if (e.button !== 0 || !down || (down.pointerId != null && e.pointerId != null && down.pointerId !== e.pointerId) || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return; this.pick(e); }; this._onPointerCancel = () => { this.pointerDown = null; }; this._onDoubleClick = e => { e.preventDefault(); this.focusTerrain(e); }; this._onControlsStart = () => { this._controlsGestureActive = true; }; this._onControlsEnd = () => { this._controlsGestureActive = false; this.updateCadastreLOD(); }; this._onControlsChange = () => { this.updateCadastreLOD(); if (this._panAnimation) this._panViewDirty = true; else this.scheduleViewChange(); this.requestRender(); }; this.controls.addEventListener('start', this._onControlsStart); this.controls.addEventListener('end', this._onControlsEnd); this.controls.addEventListener('change', this._onControlsChange); this.installTouchGestures(canvas); canvas.addEventListener('pointerdown', this._onPointerDown); canvas.addEventListener('pointerup', this._onPointerUp); canvas.addEventListener('pointercancel', this._onPointerCancel); canvas.addEventListener('dblclick', this._onDoubleClick);
@@ -462,7 +495,7 @@ export class AtlasRenderer {
   async setVillage(indexVillage, sceneJSON, { preserveView = true } = {}) { this.cancelPanAnimation('village'); const previous = preserveView ? this.captureView() : null; if (!preserveView) this.clearSelection(); try { const layerState = Object.fromEntries(Object.entries(this.layers).filter(([name]) => name !== 'cadastre').map(([name, group]) => [name, group.visible])); this.indexVillage = indexVillage || {}; this.sceneJSON = sceneJSON || {}; this.clear(); this.build(); for (const [name, visible] of Object.entries(layerState)) if (this.layers[name]) this.layers[name].visible = visible; if (this.layers.cadastre) this.layers.cadastre.visible = this._cadastreEnabled; if (this.aocMesh && this.layers.parcels) this.aocMesh.visible = this.layers.parcels.visible || Boolean(this.terroirTint || this.geologyLayer); this.restoreSelection(); if (previous && this.restoreView(previous)) this.scheduleViewChange(); else this.resetView(); } catch (error) { this.onError(error); throw error; } }
   setExaggeration(value) { const n = Number(value); const next = EXAGGERATIONS.includes(n) ? n : 1; if (next === this.exaggeration) return; this.cancelPanAnimation('exaggeration'); this.exaggeration = next; if (this.sceneJSON && this.terrain) this.updateVerticalGeometry(); }
   setInteraction(mode) { this.cancelPanAnimation('interaction'); const next = mode === 'pan' ? 'pan' : 'rotate'; this.interaction = next; this.controls.mouseButtons.LEFT = next === 'pan' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE; this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE; this.controls.touches.ONE = next === 'pan' ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE; this.requestRender(); }
-  setMode(mode) { this.mode = mode === 'atlas' ? 'atlas' : 'aerial'; this.setMaterialMode(); this.requestRender(); }
+  setMode(mode) { this.mode = mode === 'atlas' ? 'atlas' : 'aerial'; this.setMaterialMode(); this.applyLighting(); this.requestRender(); }
   setLayer(name, visible) { const next = Boolean(visible); if (name === 'communes') { this._communesVisible = next; if (this._communeLines) this._communeLines.visible = next; this.requestRender(); return; } if (name === 'cadastre') this._cadastreEnabled = next; if (this.layers[name]) this.layers[name].visible = next; if (name === 'cadastre') this.updateCadastreLOD(true); if (name === 'parcels' && this.aocMesh) this.aocMesh.visible = next || Boolean(this.terroirTint || this.geologyLayer); if (name === 'cadastre' && !next && this.selectedFeature?.key === 'cadastre') this.clearSelection(); else if (name === this.selectedFeature?.key) this.updateSelectionOverlay(); this.requestRender(); }
   setCadastralParcels(features, meta = {}) { const seen = new Set(); this.cadastralParcels = (Array.isArray(features) ? features : []).filter(Boolean).filter(feature => { const p = props(feature), commune = p.communeCode ?? p.commune_code ?? p.codeCommune ?? '', id = p.id ?? p.parcelId ?? p.parcel_id ?? feature.id ?? ''; const key = commune && id ? `${commune}:${id}` : featureIdentity(feature, 'cadastre'); if (seen.has(key)) return false; seen.add(key); return true; }); this.cadastralMeta = { ...(meta || {}) }; if (this.layers.cadastre && this.sceneJSON) this.rebuildCadastreLayer(); this.requestRender(); }
   setClassification(name, visible) { const key = String(name), normalized = normalizeClass(key); this.classificationVisibility[key] = Boolean(visible); this.classificationVisibility[normalized] = Boolean(visible); if (normalized === 'regional') { this.classificationVisibility.unclassified = Boolean(visible); this.classificationVisibility.unknown = Boolean(visible); } if (this.sceneJSON) { this.updateParcelVisibility(); this.drawAocOverlay(); } if (this.selectedFeature?.key === 'parcels') this.updateSelectionOverlay(); this.requestRender(); }
@@ -647,7 +680,7 @@ export class AtlasRenderer {
     const ctx = this._labelCanvas.getContext('2d'); ctx.font = m.font; const text = el.textContent || '';
     return { w: Math.ceil(ctx.measureText(text).width + m.spacing * text.length + Math.max(0, m.extra)) || 80, h: m.h || 24 };
   }
-  addLabels() { if (!this.labels) return; const pending = Boolean(this.progressiveBuild && this._incomingGroup && !this._incomingGroup.visible), holder = pending ? document.createElement('div') : this.labels; if (pending) { this._pendingLabels?.holder.remove(); holder.className = 'map-label-batch'; holder.style.visibility = 'hidden'; this.labels.append(holder); } else this.labels.replaceChildren(); this.labels.style.pointerEvents = 'none'; const tierName = ['grand-cru', 'premier-cru', 'lieu-dit', 'lieu-dit']; const items = labelCandidates(this.sceneJSON).map(({ feature, layer, tier, text, point, area }) => { const el = document.createElement('button'); el.type = 'button'; el.className = `map-label map-label--${tierName[tier]}`; el.style.pointerEvents = 'auto'; el.style.visibility = 'hidden'; el.textContent = text; el.title = tier === 0 ? `${text} · Grand Cru` : tier === 1 ? `${text} · Premier Cru` : text; el.addEventListener('click', e => { e.stopPropagation(); this.selectFeature(feature, layer); }); holder.append(el); return { el, p: this.point(point), feature, tier, area }; }); /* Sizes come from the font metrics (labelSize), so creating labels never forces the page to lay itself out. */ for (const item of items) { const size = this.labelSize(item.el, item.tier); item.w = size.w; item.h = size.h; } /* Laid out invisibly for measuring, then hidden until placed, so they never all flash at once. */ for (const item of items) { item.el.hidden = true; item.el.style.visibility = ''; } if (pending) { this._pendingLabels = { holder, items }; return; } this.labelItems = items; if (this.progressiveBuild && this.terrain) this.renderScene(); else this.requestRender(); /* placed in this same frame, so no frame shows them all hidden */ }
+  addLabels() { if (!this.labels) return; const pending = Boolean(this.progressiveBuild && this._incomingGroup && !this._incomingGroup.visible), holder = pending ? document.createElement('div') : this.labels; if (pending) { this._pendingLabels?.holder.remove(); holder.className = 'map-label-batch'; holder.style.visibility = 'hidden'; this.labels.append(holder); } else this.labels.replaceChildren(); this.labels.style.pointerEvents = 'none'; const tierName = ['grand-cru', 'premier-cru', 'lieu-dit', 'lieu-dit']; const items = labelCandidates(this.sceneJSON).map(({ feature, layer, tier, text, point, area }) => { const el = document.createElement('button'); el.type = 'button'; el.className = `map-label map-label--${tierName[tier]}`; el.style.pointerEvents = 'auto'; el.style.visibility = 'hidden'; el.textContent = text; const rc = regionClass(normalizeClass(className(feature))); el.title = rc ? `${text} · ${rc.tier ? `${rc.tier} ` : ''}${rc.label}` : tier === 0 ? `${text} · Grand Cru` : tier === 1 ? `${text} · Premier Cru` : text; /* a region's own classes (Mosel Großlagen) are named as such, not as grand crus */ el.addEventListener('click', e => { e.stopPropagation(); this.selectFeature(feature, layer); }); holder.append(el); return { el, p: this.point(point), feature, tier, area }; }); /* Sizes come from the font metrics (labelSize), so creating labels never forces the page to lay itself out. */ for (const item of items) { const size = this.labelSize(item.el, item.tier); item.w = size.w; item.h = size.h; } /* Laid out invisibly for measuring, then hidden until placed, so they never all flash at once. */ for (const item of items) { item.el.hidden = true; item.el.style.visibility = ''; } if (pending) { this._pendingLabels = { holder, items }; return; } this.labelItems = items; if (this.progressiveBuild && this.terrain) this.renderScene(); else this.requestRender(); /* placed in this same frame, so no frame shows them all hidden */ }
   clearSelection(notify = true) { const hadSelection = Boolean(this.selectedFeature); this.selectedFeature = null; this.updateSelectionOverlay(); if (notify && hadSelection) this.onSelect(null, null, { kind: null, identity: null, layer: null }); this.requestRender(); }
   selectFeature(feature, key, context = {}) { if (!feature) return; const identity = featureIdentity(feature, key), provenance = featureFactsProvenance(feature), meta = key === 'cadastre' ? { kind: 'cadastre-parcel', ...this.cadastralMeta } : { kind: key === 'parcels' ? 'aoc-parcel' : 'climat' }; this.selectedFeature = { feature, key, identity }; this.updateSelectionOverlay(); this.onSelect(feature, key, { identity, layer: key, ...meta, ...provenance, ...context }); this.requestRender(); }
   // While a new scene is still being built its features are not all there yet; the swap calls this again when they are.
@@ -699,12 +732,15 @@ export class AtlasRenderer {
   setSun(sun) { this.sunState = sun && Number.isFinite(sun.elevation) && Number.isFinite(sun.azimuth) ? { elevation: sun.elevation, azimuth: sun.azimuth } : null; this.applyLighting(); }
   applyLighting() {
     if (!this.sunLight) return;
+    this.skyWanted = false; // the daylight branch below asks for the sky again
     const brightness = this._brightness ?? 1, sun = this.sunState, light = this.sunLight, shadows = Boolean(sun && sun.elevation > -1);
     if (this.renderer.shadowMap.enabled !== shadows) { this.renderer.shadowMap.enabled = shadows; if (this.terrain) this.terrain.material.needsUpdate = true; }
     photoUniforms.sunShade.value = sun ? smoothstep(-2, 4, sun.elevation) : 0;
     const overcast = Boolean(this.runoffState?.falling); // grey, softer light while it rains
     if (!sun && this.frostState) { this.light.intensity = LIGHT_INTENSITY * brightness * .78; this.light.color.copy(FROST_SKY); light.intensity = 0; this.aocMaterial?.color.setScalar(.72); this.scene.background.copy(BACKGROUND_FROST); this.scene.fog.color.copy(this.scene.background); this.requestRender(); return; }
-    if (!sun) { this.light.intensity = LIGHT_INTENSITY * brightness * (overcast ? .8 : 1); this.light.color.copy(overcast ? LIGHT_RAIN : WHITE); light.intensity = 0; this.aocMaterial?.color.copy(WHITE); this.scene.background.copy(overcast ? BACKGROUND_RAIN : BACKGROUND_DAY); this.scene.fog.color.copy(this.scene.background); this.requestRender(); return; }
+    if (!sun && overcast) { this.light.intensity = LIGHT_INTENSITY * brightness * .8; this.light.color.copy(LIGHT_RAIN); light.intensity = 0; this.aocMaterial?.color.copy(WHITE); this.scene.background.copy(BACKGROUND_RAIN); this.scene.fog.color.copy(this.scene.background); this.requestRender(); return; }
+    if (!sun) { this.light.intensity = LIGHT_INTENSITY * brightness * .82; this.light.color.copy(SKY_DAY); light.intensity = LIGHT_INTENSITY * brightness * 1.02; light.color.copy(SUN_DAY); this.aocMaterial?.color.copy(WHITE);
+      this.scene.background.copy(this.mode === 'aerial' ? BACKGROUND_SKY : BACKGROUND_DAY); this.scene.fog.color.copy(this.scene.background); this.skyWanted = this.mode === 'aerial'; this.placeSunLight(DAY_SUN); this.requestRender(); return; }
     const day = smoothstep(-6, 8, sun.elevation);
     this.light.intensity = LIGHT_INTENSITY * brightness * (.08 + .2 * day); this.light.color.copy(SKY_NIGHT).lerp(WHITE, day);
     // Strong sun against a faint sky makes lit and shaded ground easy to tell apart; a low sun is made stronger so
@@ -712,6 +748,12 @@ export class AtlasRenderer {
     light.intensity = LIGHT_INTENSITY * brightness * smoothstep(-1, 12, sun.elevation) / (.25 + .75 * Math.sin(Math.max(0, sun.elevation) * Math.PI / 180)); light.color.copy(SUN_LOW).lerp(SUN_HIGH, smoothstep(0, 25, sun.elevation));
     this.scene.background.copy(BACKGROUND_NIGHT).lerp(BACKGROUND_DAY, day); this.scene.fog.color.copy(this.scene.background);
     this.aocMaterial?.color.setScalar(.3 + .7 * day); // the appellation colours are unlit, so they are dimmed by hand at dusk
+    this.placeSunLight(sun);
+    this.requestRender();
+  }
+  // The sun light and its shadow camera, over the whole scene, looking from { azimuth, elevation } (degrees).
+  placeSunLight(sun) {
+    const light = this.sunLight;
     if (this.bounds) {
       // The shadow camera covers the whole scene, looking from the sun.
       const [x0, y0, x1, y1] = this.bounds, centre = this.worldPoint((x0 + x1) / 2, (y0 + y1) / 2), half = Math.hypot(x1 - x0, y1 - y0) * WORLD_SCALE / 2;
@@ -1052,7 +1094,7 @@ export class AtlasRenderer {
         if (!box) { hide(); continue; }
         item.off = used; item.el.style.left = `${x}px`; item.el.style.top = `${box.ly}px`; item.el.style.transform = 'translate(-50%, -50%)'; placed.push(box);
         if (!wasShown) { item.el.hidden = false; item.since = now; } }
-      if (dwelling) { clearTimeout(this._labelDwellTimer); this._labelDwellTimer = setTimeout(() => this.requestRender(), LABEL_DWELL_MS + 20); } } const north = this.container.querySelector('.north-mark'); if (north) { const azimuth = Math.atan2(this.camera.position.x - this.controls.target.x, this.camera.position.z - this.controls.target.z); north.style.transform = `rotate(${azimuth}rad)`; } this.updateScreenLineStyle(); this.updateHaze(); this.renderer.render(this.scene, this.camera); if (this.drawCrossfade(performance.now())) this.requestRender(true); this.releaseRetiredMaterials(); }
+      if (dwelling) { clearTimeout(this._labelDwellTimer); this._labelDwellTimer = setTimeout(() => this.requestRender(), LABEL_DWELL_MS + 20); } } const north = this.container.querySelector('.north-mark'); if (north) { const azimuth = Math.atan2(this.camera.position.x - this.controls.target.x, this.camera.position.z - this.controls.target.z); north.style.transform = `rotate(${azimuth}rad)`; } this.updateScreenLineStyle(); this.updateHaze(); this.updateSky(); this.renderer.render(this.scene, this.camera); if (this.drawCrossfade(performance.now())) this.requestRender(true); this.releaseRetiredMaterials(); }
   animate() { this.requestRender(); }
   updateScreenLineResolution() { const resolution = new THREE.Vector2(this.renderer?.domElement?.width || this.canvas?.width || 1, this.renderer?.domElement?.height || this.canvas?.height || 1); for (const group of [...Object.values(this.layers || {}), this.selectionOverlay].filter(Boolean)) for (const object of group.children || []) { const material = object.material, uniform = material?.uniforms?.resolution; if (uniform) uniform.value.copy(resolution); } }
   pixelRatio() { return Math.min(globalThis.devicePixelRatio || 1, 1.5); }
@@ -1077,7 +1119,19 @@ export class AtlasRenderer {
     if (!Number.isFinite(edge)) return;
     // Close views end near the focus, so a clear zone wins over reaching the edge exactly: the vineyards are never hazed.
     fog.far = Math.max(edge * .96, d * 2.6); fog.near = Math.min(Math.max(fog.far * HAZE_START, d * 1.7), fog.far * .85);
+    // with the sky shown, the land beyond a few view distances melts into the mist, as on a hazy summer day
+    if (this.sky?.visible) { fog.far = Math.min(fog.far, d * 6); fog.near = Math.min(fog.near, fog.far * .3); }
     this.hazeUniforms.hazeNear.value = fog.near; this.hazeUniforms.hazeFar.value = fog.far;
+  }
+  updateSky() {
+    const sky = this.sky; if (!sky) return;
+    const want = Boolean(this.skyWanted && this.terrain && this.terrainReady?.());
+    if (!want) { if (sky.visible) { sky.visible = false; this.skyStart = 0; this.scene.fog.color.copy(this.scene.background); } return; }
+    if (!this.skyStart) this.skyStart = performance.now();
+    const t = Math.min(1, (performance.now() - this.skyStart) / SKY_FADE_MS), reveal = t * t * (3 - 2 * t);
+    sky.visible = true; sky.position.copy(this.camera.position); sky.material.uniforms.reveal.value = reveal;
+    this.scene.fog.color.copy(BACKGROUND_SKY).lerp(SKY_MIST, reveal); // the distant land fades into the mist
+    if (t < 1) this.requestRender(true);
   }
   rasterSize() { return this.maxRaster || Math.min(MAX_RASTER_SIZE, 2048); }
   // Decoded photo tiles are kept for reuse; the oldest are released past the limit, except any a photo being composed

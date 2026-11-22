@@ -16,7 +16,10 @@ export const REGION = {
 const byKey = new Map();
 // Wording a region may change (region.json "terms"): the Rhône says commune and lieu-dit, never village or climat.
 const TERMS = { village: 'village', villages: 'villages', Village: 'Village', Villages: 'Villages', wineRegion: 'wine region', WineRegion: 'Wine region',
-  allWineRegions: 'All wine regions', searchGroup: 'Crus', classificationField: 'AOC classification (Grand Cru, Premier Cru…)' };
+  allWineRegions: 'All wine regions', searchGroup: 'Crus', classificationField: 'AOC classification (Grand Cru, Premier Cru…)',
+  classesName: 'Appellations', classesHint: 'AOC classes, as usual', site: 'cru', sites: 'crus', lieuDit: 'lieu-dit', lieuxDits: 'lieux-dits',
+  Commune: 'Commune', terrainSource: 'IGN', geologyHint: 'Rocks and soils, BRGM map', exploreHint: 'Explore a parcel or lieu-dit',
+  sourceNote: 'RGE ALTI® · IGN BD TOPO® · DGFiP / Etalab', sourceNoteContext: 'RGE ALTI® · coarse context terrain · IGN BD TOPO® · DGFiP / Etalab' };
 export const term = key => TERMS[key] ?? key;
 
 export async function loadRegion(url) {

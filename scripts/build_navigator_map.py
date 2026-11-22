@@ -130,9 +130,10 @@ def main(site: Path):
             if not cls: continue
             # the overview keeps regional areas too (they make the broad wine-region bands); the local map does not
             coarse.append(cls)
-            if cls == 'regional' or (site.name != 'rhone' and cls not in KEEP_CLASSES): continue
+            # Burgundy keeps its three AOC tiers; other regions (Rhône appellations, Mosel Großlagen) keep every class
+            if cls == 'regional' or (site.name == 'dist' and cls not in KEEP_CLASSES): continue
             rings = dissolved_rings(p.get('rings'), LOCAL_TOL, 200)
-            if rings: aoc.append([cls, rings, str(p.get('id') or ''), 'parcels', p.get('name') or ''])
+            if rings: aoc.append([cls, rings, str(p.get('id') or ''), 'parcels', '' if p.get('noLabel') else p.get('name') or ''])  # noLabel: drawn but not named
         # premier and grand cru lieux-dits: on the 3D map these carry the class colour where the AOC layer has no
         # separate premier-cru area (the part inside the AOC, aocSelectionRings, when given). The navigator stops at
         # the cru: a lieu-dit whose cru the AOC layer already draws (same name) is left out.

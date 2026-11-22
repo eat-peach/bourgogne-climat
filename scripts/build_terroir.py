@@ -37,6 +37,10 @@ SCENES = DATA / 'scenes'
 T1 = Path(os.environ.get('TERROIR_T1', ROOT / 'burgundy_full' / '03_terrain' / 'rgealti_mnt_1m'))        # fine terrain tiles
 T25 = Path(os.environ.get('TERROIR_T25', ROOT / 'burgundy_full' / '03_terrain' / 'overview_rgealti_25m'))  # wide-area terrain
 OUT = DATA / 'terroir'
+# Grid north of the map projection (Lambert-93) is not true north away from 3°E: in the Mosel it is about 2.95° east of
+# true north, so a downhill direction measured on the grid is turned by that much to give a compass aspect. Set per
+# region (TERROIR_ASPECT_OFFSET=2.95 for the Mosel); 0 keeps the earlier behaviour.
+ASPECT_OFFSET = float(os.environ.get('TERROIR_ASPECT_OFFSET', '0'))
 CELL = 5.0                      # metres, analysis grid
 MARGIN = 60.0                   # metres around the village for slope at the edges
 HORIZON_KM = 8.0
@@ -214,7 +218,7 @@ def village(vid):
         sl = slope[m]; dn = down[m]; z = dem[m]
         w = sl
         ax, ay = float((np.sin(dn) * w).sum()), float((np.cos(dn) * w).sum())
-        aspect = (math.degrees(math.atan2(ax, ay)) + 360) % 360
+        aspect = (math.degrees(math.atan2(ax, ay)) + ASPECT_OFFSET + 360) % 360
         consistency = math.hypot(ax, ay) / max(1e-9, float(w.sum()))  # 1 = all one way, 0 = mixed
         zmin = float(np.nanmin(dmin[m])) if np.isfinite(dmin[m]).any() else float(np.nanmin(z))
         zmax = float(np.nanmax(dmax[m])) if np.isfinite(dmax[m]).any() else float(np.nanmax(z))

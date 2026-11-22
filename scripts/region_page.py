@@ -48,6 +48,18 @@ def main(region_id: str) -> None:
         if count == 0 or (count > 1 and mode != ["all"]):
             raise SystemExit(f"expected {'at least' if mode else 'exactly'} one {old!r} in dist/index.html; update region_page.py")
         page = page.replace(old, new)
+    # The Sources panel (region.json "provenance": {"intro", "items": [[heading, html], ...], "note"}): a region whose
+    # data does not come from the French sources lists its own, with the credit lines its licences require. Item text
+    # is written by the atlas author and may hold links.
+    prov = cfg.get("provenance")
+    if prov:
+        body = (f'<h2>Atlas provenance</h2><p>{html.escape(prov["intro"])}</p><dl>'
+                + "".join(f"<dt>{html.escape(k)}</dt><dd>{v}</dd>" for k, v in prov["items"])
+                + f'</dl><p class="modal-note">{html.escape(prov["note"])}</p>')
+        page, found = re.subn(r'(<div class="source-modal" id="source-modal" hidden><div class="modal-card"><button class="modal-close" id="modal-close">×</button>).*?(</div></div>)',
+                              lambda m: m.group(1) + body + m.group(2), page, count=1, flags=re.S)
+        if found != 1:
+            raise SystemExit("Sources panel not found in dist/index.html; update region_page.py")
     # The atlas list stays in dist/index.html: seen from a region folder, every link moves up one level, and this
     # region's own entry becomes the current page.
     def relink(match):

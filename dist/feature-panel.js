@@ -1,3 +1,4 @@
+import { term } from './region.js';
 export function areaUnits(squareMetres) {
   if (squareMetres == null || squareMetres === '' || !Number.isFinite(Number(squareMetres)) || Number(squareMetres) < 0) return null;
   const m2 = Number(squareMetres);
@@ -91,7 +92,9 @@ const TIER_KEYS = [['grand', /grand cru/i], ['premier', /premier cru|1er cru/i],
 export function glanceTile(label, value, sub, { className = '', icon = '' } = {}) {
   const tile = element('div', `glance-tile${className ? ` ${className}` : ''}`);
   tile.innerHTML = `<span class="terroir-k">${label}</span><strong class="terroir-v">${icon}</strong><small></small>`;
-  tile.querySelector('strong').append(document.createTextNode(value ?? '—'));
+  // long words ("South-southwest") get a smaller size so they fit the tile instead of being cut off
+  const text = element('span', 'terroir-v-text', String(value ?? '—')); tile.querySelector('strong').append(text);
+  if (String(value ?? '').length > 10) tile.classList.add('is-long');
   const small = tile.querySelector('small'); if (sub) small.textContent = sub; else small.remove();
   if (value == null) tile.classList.add('is-unavailable');
   return tile;
@@ -107,7 +110,7 @@ export function renderFeaturePanel(card, { title, subtitle, identity = [], area,
   const separator = title.lastIndexOf(' – ');
   if (separator > 0) {
     const commune = element('span', 'fact-village-name');
-    commune.append(element('span', 'fact-commune-label', 'Commune · '), document.createTextNode(title.slice(separator + 3)));
+    commune.append(element('span', 'fact-commune-label', `${term('Commune')} · `), document.createTextNode(title.slice(separator + 3)));
     heading.append(element('span', 'fact-place-name', title.slice(0, separator)), commune);
   }
   else heading.textContent = title;

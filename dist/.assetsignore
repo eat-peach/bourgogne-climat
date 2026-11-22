@@ -1,5 +1,4 @@
 # Never upload interrupted-write leftovers.
 *.tmp
 
-# Local pilot regions: never uploaded until they are ready to go public.
-mosel/
+# Local pilot regions: never uploaded until they are ready to go public. (The Mosel went public on 22 November 2026.)

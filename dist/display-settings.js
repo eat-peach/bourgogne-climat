@@ -2,7 +2,7 @@
 // Choices are kept in this browser only and shared by every atlas on the site.
 import { DISPLAY_DEFAULTS, clampDisplay } from './atlas-renderer.js';
 
-const STORAGE_KEY = 'atlas-display-v2';
+const STORAGE_KEY = 'atlas-display-v3'; // v3: the daylight look (Nov 2026) changed the defaults, so settings saved for the old look are not reused
 // Sliders work in whole numbers; scale turns them into renderer values.
 const CONTROLS = [
   { key: 'brightness', label: 'Brightness', hint: 'Light on the whole map', min: 50, max: 150, step: 5, scale: 100, text: v => `${v}%` },

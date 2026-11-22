@@ -1539,3 +1539,6 @@ html:not(.phone-ui) .detail-panel:has(.feature-summary) .detail-close{position:s
 /* cru names on the navigator's local map */
 .nav-label--cru{font-size:7.5px;font-style:italic;fill:#4a3426}
 .nav-label--grand{font-size:8.5px;font-weight:700;font-style:normal;fill:#3a2418}
+/* glance tiles: a long value (e.g. "South-southwest") is set smaller rather than cut off */
+.glance-tile .terroir-v-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.glance-tile.is-long .terroir-v{font-size:15px}
