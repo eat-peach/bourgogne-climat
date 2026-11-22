@@ -27,6 +27,8 @@ def main(region_id: str) -> None:
         ('"three":"./vendor/three.module.js","three/addons/":"./vendor/"', '"three":"../vendor/three.module.js","three/addons/":"../vendor/"'),
         ('<link rel="stylesheet" href="./style.css" />', f'<link rel="stylesheet" href="../style.css" />\n  <meta name="atlas-region" content="data/region.json" />'),
         ('src="./app.js"', 'src="../app.js"'),
+        ('<link rel="modulepreload" href="./', '<link rel="modulepreload" href="../', "all"),
+        ('<link rel="preload" href="./', '<link rel="preload" href="../', "all"),
         ('href="./legal.html"', 'href="../legal.html"', "all"),
         ('aria-label="Bourgogne Climat: choose an atlas"><span>BOURGOGNE CLIMAT</span>', f'aria-label="{title}: choose an atlas"><span>{brand}</span>'),
         ("BOURGOGNE CLIMAT / 2026", f"{brand} / 2026"),

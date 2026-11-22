@@ -5,24 +5,87 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   X-Frame-Options: SAMEORIGIN
 
-# Payload folders are always requested with ?v=<assetVersion> (scripts/stamp_asset_version.py),
-# so browsers may keep them for a year. Root data files (index.json, texture-manifest.json,
-# communes, context terrain) keep Cloudflare's default revalidation, so a new assetVersion is seen at once.
+# Payload folders are always requested with ?v=<assetVersion> (scripts/stamp_asset_version.py stamps every atlas:
+# dist/data and each dist/<site>/data), so browsers may keep them for a year. Root data files (index.json,
+# texture-manifest.json, region.json, communes, context terrain) keep Cloudflare's default revalidation, so a new
+# assetVersion is seen at once.
 /data/scenes/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/scenes/*
   Cache-Control: public, max-age=31536000, immutable
 
 /data/textures/*
   Cache-Control: public, max-age=31536000, immutable
 
+/:site/data/textures/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/context-textures/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/context-textures/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /data/feature-facts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/feature-facts/*
   Cache-Control: public, max-age=31536000, immutable
 
 /data/cadastre/*
   Cache-Control: public, max-age=31536000, immutable
 
+/:site/data/cadastre/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /data/ownership/*
   Cache-Control: public, max-age=31536000, immutable
 
+/:site/data/ownership/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/photo-tiles/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/photo-tiles/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/navigator/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/navigator/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/geology/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/geology/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/terroir/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/terroir/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/streams/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/streams/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/rainfields/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/rainfields/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/cruterrain/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/:site/data/cruterrain/*
+  Cache-Control: public, max-age=31536000, immutable
 
 /vendor/*
   Cache-Control: public, max-age=604800
