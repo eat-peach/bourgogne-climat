@@ -46,9 +46,13 @@ const DAY_SUN = { azimuth: 200, elevation: 40 }, SUN_DAY = new THREE.Color(0xffe
 // Once the map has loaded, a sky dome fades in around the camera: soft blue overhead, pale mist at the horizon, and the
 // distant land fades into the same mist. While loading, the plain warm background shows, so nothing jumps to blue.
 const SKY_TOP = new THREE.Color(0x3f8fe0), SKY_MIST = new THREE.Color(0xc9def0), SKY_FADE_MS = 1100;
+// Beyond the assembled view, the region's coarse background terrain (200 m heights with their photos) is drawn as a
+// far ring, so the land runs on towards the horizon instead of ending at the edge of the view, and only the far
+// distance melts into the mist. FAR_STEP thins the 200 m grid (400 m), FAR_DROP_M sinks the ring a little under the view.
+const FAR_RADIUS_M = 40000, FAR_STEP = 2, FAR_TEXTURE_PX = 1024, FAR_DROP_M = 4;
 const SKY_VERTEX_SHADER = `varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const SKY_FRAGMENT_SHADER = `uniform vec3 top; uniform vec3 mist; uniform vec3 base; uniform float reveal; varying vec3 vDir;
-  void main() { float h = normalize(vDir).y; vec3 sky = mix(mist, top, smoothstep(.015, .28, h)); gl_FragColor = vec4(mix(base, sky, reveal), 1.0);
+  void main() { float h = normalize(vDir).y; vec3 sky = mix(mist, top, smoothstep(-.01, .11, h)); gl_FragColor = vec4(mix(base, sky, reveal), 1.0);
   #include <colorspace_fragment>
   }`; // the same output colour conversion as the land, so mist on the land and in the sky match
 // Falling rain: thin streaks in a box that follows the view; more of them show the harder it rains.
@@ -171,9 +175,22 @@ const WATER_FRAGMENT_SHADER = `
     #include <colorspace_fragment>
   }
 `;
+const FAR_HOLE = { value: new THREE.Vector4(0, 0, 0, 0) };
+function farPhotoTexture(shader) { Object.assign(shader.uniforms, photoUniforms, { farHole: FAR_HOLE });
+  shader.vertexShader = 'varying vec2 vFarXZ;\n' + shader.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n  vFarXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+  shader.fragmentShader = 'uniform float photoSaturation;\nuniform float photoGamma;\nuniform float photoContrast;\nuniform float photoLeaf;\nuniform float photoExposure;\nuniform float photoDehaze;\nuniform vec4 farHole;\nvarying vec2 vFarXZ;\n' +
+    shader.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if (vFarXZ.x > farHole.x && vFarXZ.x < farHole.z && vFarXZ.y > farHole.y && vFarXZ.y < farHole.w) discard;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+#ifdef USE_MAP
+  diffuseColor.rgb = max(diffuseColor.rgb - photoDehaze, 0.) / (1. - photoDehaze);
+  diffuseColor.rgb = pow(max(mix(vec3(dot(diffuseColor.rgb, vec3(.2126, .7152, .0722))), diffuseColor.rgb, photoSaturation), 0.), vec3(photoGamma));
+  { vec3 c = clamp(diffuseColor.rgb, 0., 1.); diffuseColor.rgb = mix(c, c * c * (3. - 2. * c), photoContrast); }
+  { vec3 c = diffuseColor.rgb; float leaf = clamp((c.g / max(max(c.r, c.b), .002) - 1.) * 3., 0., 1.); diffuseColor.rgb = mix(c, c * vec3(1.04, 1.32, .78), leaf * photoLeaf) * photoExposure; }
+#endif`); }
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const blankRainTexture = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; return t; };
-const photoUniforms = { photoSaturation: { value: DISPLAY_DEFAULTS.saturation }, photoGamma: { value: BASE_GAMMA }, photoContrast: { value: .55 }, photoLeaf: { value: .85 }, photoExposure: { value: 1.3 }, photoDehaze: { value: .015 }, sunShade: { value: 0 },
+const BLANK_WATER = { waterTex: { value: blankRainTexture() }, waterOn: { value: 0 } };
+const photoUniforms = { photoSaturation: { value: DISPLAY_DEFAULTS.saturation }, photoGamma: { value: BASE_GAMMA }, photoContrast: { value: .55 }, photoLeaf: { value: .85 }, photoExposure: { value: 1.3 }, photoDehaze: { value: .015 }, sunShade: { value: 0 }, waterColour: { value: new THREE.Color(0x3e6672) },
   // Rain on the ground (see rebuildRunoff): rainOn switches it on; soak, film and pond run 0–1 with the storm; front is how
   // far down the slopes the water has travelled (0–1 of the longest travel time); the textures hold the per-cell fields.
   rainOn: { value: 0 }, rainTime: { value: 0 }, rainSoak: { value: 0 }, rainFilm: { value: 0 }, rainPond: { value: 0 }, rainFront: { value: 1 }, rainGrid: { value: 1 }, rainArrivalScale: { value: 1 }, rainTexA: { value: blankRainTexture() }, rainTexB: { value: blankRainTexture() },
@@ -182,7 +199,7 @@ const photoUniforms = { photoSaturation: { value: DISPLAY_DEFAULTS.saturation },
   frostOn: { value: 0 }, frostGrid: { value: 1 }, frostFloor: { value: 0 }, frostDepth: { value: 100 }, frostStrength: { value: 0 }, frostDrain: { value: 0 }, frostLocal: { value: 0 }, frostLapse: { value: .0065 }, frostTex: { value: blankRainTexture() } };
 // With Sun & rain sunlight on, ground the sun reaches is warmed and ground in shade is cooled and darkened, judged from
 // how much of its light comes straight from the sun, and a thin line marks the border between the two.
-function saturatePhotoTexture(shader) { Object.assign(shader.uniforms, photoUniforms);
+function saturatePhotoTexture(shader) { Object.assign(shader.uniforms, photoUniforms, this?.userData?.water || BLANK_WATER);
   shader.vertexShader = `attribute vec2 gridUv;
 varying vec2 vGridUv;
 varying vec2 vRainPos;
@@ -195,6 +212,9 @@ uniform float photoLeaf;
 uniform float photoExposure;
 uniform float photoDehaze;
 uniform float sunShade;
+uniform sampler2D waterTex;
+uniform float waterOn;
+uniform vec3 waterColour;
 uniform float rainOn;
 uniform float rainTime;
 uniform float rainSoak;
@@ -229,6 +249,9 @@ float rainNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. 
   // daylight: leaves (green above red and blue) turn fresher and more yellow-green, as vines and grass look in the sun,
   // and the whole photo is lifted a little, since survey flights are exposed for haze
   { vec3 c = diffuseColor.rgb; float leaf = clamp((c.g / max(max(c.r, c.b), .002) - 1.) * 3., 0., 1.); diffuseColor.rgb = mix(c, c * vec3(1.04, 1.32, .78), leaf * photoLeaf) * photoExposure; }
+  // rivers (regions that ask for it): survey photos often catch the sun on the water, which then reads as a pale strip
+  // like a road; the mapped water takes the river's own colour, keeping the photo's light and dark for ripples and shade
+  if (waterOn > 0.) { float w = texture2D(waterTex, vec2(vGridUv.x, 1. - vGridUv.y)).r; if (w > .003) { float l = dot(diffuseColor.rgb, vec3(.2126, .7152, .0722)); diffuseColor.rgb = mix(diffuseColor.rgb, waterColour * (.8 + .6 * min(l, 1.)), w * .88); } }
 #endif`).replace('#include <opaque_fragment>', `if (rainOn > 0.) {
     vec2 rainUv = vec2(vGridUv.x, 1. - vGridUv.y);
     vec4 fieldA = texture2D(rainTexA, rainUv), fieldB = texture2D(rainTexB, rainUv);
@@ -493,7 +516,80 @@ export class AtlasRenderer {
     this.resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.resize()) : null; this.resizeObserver?.observe(this.container); this.resize(); this.requestRender();
   }
   async setVillage(indexVillage, sceneJSON, { preserveView = true } = {}) { this.cancelPanAnimation('village'); const previous = preserveView ? this.captureView() : null; if (!preserveView) this.clearSelection(); try { const layerState = Object.fromEntries(Object.entries(this.layers).filter(([name]) => name !== 'cadastre').map(([name, group]) => [name, group.visible])); this.indexVillage = indexVillage || {}; this.sceneJSON = sceneJSON || {}; this.clear(); this.build(); for (const [name, visible] of Object.entries(layerState)) if (this.layers[name]) this.layers[name].visible = visible; if (this.layers.cadastre) this.layers.cadastre.visible = this._cadastreEnabled; if (this.aocMesh && this.layers.parcels) this.aocMesh.visible = this.layers.parcels.visible || Boolean(this.terroirTint || this.geologyLayer); this.restoreSelection(); if (previous && this.restoreView(previous)) this.scheduleViewChange(); else this.resetView(); } catch (error) { this.onError(error); throw error; } }
-  setExaggeration(value) { const n = Number(value); const next = EXAGGERATIONS.includes(n) ? n : 1; if (next === this.exaggeration) return; this.cancelPanAnimation('exaggeration'); this.exaggeration = next; if (this.sceneJSON && this.terrain) this.updateVerticalGeometry(); }
+  setExaggeration(value) { const n = Number(value); const next = EXAGGERATIONS.includes(n) ? n : 1; if (next === this.exaggeration) return; this.cancelPanAnimation('exaggeration'); this.exaggeration = next; if (this.sceneJSON && this.terrain) this.updateVerticalGeometry(); this.refreshFarHeights(); }
+  // A region's photo look (region.json "look"): saturationScale and leaf tone down photos that are already vivid, and
+  // waterColour gives the mapped rivers their colour where the photos show glare.
+  setLook(look = {}) {
+    this._look = { saturationScale: Number(look.saturationScale) || 1, leaf: Number.isFinite(Number(look.leaf)) ? Number(look.leaf) : .85, waterColour: look.waterColour || null };
+    photoUniforms.photoLeaf.value = this._look.leaf; photoUniforms.photoSaturation.value = (this._saturation ?? DISPLAY_DEFAULTS.saturation) * this._look.saturationScale;
+    if (this._look.waterColour) photoUniforms.waterColour.value.set(this._look.waterColour);
+    if (this.sceneJSON && this.terrain) this.buildWaterMask(); this.requestRender();
+  }
+  // The mapped water surfaces, drawn into a mask over the view, soft at the banks.
+  buildWaterMask() {
+    const water = this.terrain?.material?.userData?.water; if (!water) return;
+    if (water.waterTex.value !== BLANK_WATER.waterTex.value) water.waterTex.value.dispose();
+    water.waterTex.value = BLANK_WATER.waterTex.value; water.waterOn.value = 0;
+    const surfaces = this._look?.waterColour ? this.sceneJSON?.waterSurfaces || [] : []; if (!surfaces.length) return;
+    const size = 2048, canvas = document.createElement('canvas'); canvas.width = canvas.height = size; const ctx = canvas.getContext('2d');
+    const sx = size / this.widthM, sy = size / this.depthM; ctx.filter = 'blur(.8px)'; ctx.fillStyle = '#fff';
+    for (const feature of surfaces) { ctx.beginPath(); for (const { ring } of partsOf(feature)) ring.forEach((c, i) => { const x = (Number(c[0]) - this.bounds[0]) * sx, y = size - (Number(c[1]) - this.bounds[1]) * sy; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.fill('evenodd'); }
+    const tex = new THREE.CanvasTexture(canvas); tex.generateMipmaps = false; tex.minFilter = tex.magFilter = THREE.LinearFilter; water.waterTex.value = tex; water.waterOn.value = 1;
+  }
+  // The far ring (see FAR_RADIUS_M): the region's background tiles, data/context-terrain.json with their photos.
+  setFarTerrain(tiles, manifest = {}, base = '') { this._farSource = { tiles: Array.isArray(tiles) ? tiles : [], manifest: manifest || {}, base }; if (this.bounds) this.updateFarTerrain(); }
+  updateFarTerrain() {
+    const src = this._farSource, b = this.bounds; if (!src?.tiles.length || !b) return;
+    if (!this.farGroup) { this.farGroup = new THREE.Group(); this.farGroup.name = 'far-terrain'; this.farGroup.visible = false; this.scene.add(this.farGroup); this._farTiles = new Map(); }
+    const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, r = FAR_RADIUS_M, want = new Set(), reach = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const tile of src.tiles) {
+      const tb = tile.bounds; if (!Array.isArray(tb) || tb[2] < cx - r || tb[0] > cx + r || tb[3] < cy - r || tb[1] > cy + r) continue;
+      want.add(tile.id); if (!this._farTiles.has(tile.id)) this._farTiles.set(tile.id, this.makeFarTile(tile));
+      reach[0] = Math.min(reach[0], tb[0]); reach[1] = Math.min(reach[1], tb[1]); reach[2] = Math.max(reach[2], tb[2]); reach[3] = Math.max(reach[3], tb[3]);
+    }
+    for (const [id, mesh] of this._farTiles) if (!want.has(id)) { this.farGroup.remove(mesh); mesh.geometry.dispose(); mesh.material.map?.dispose(); mesh.material.dispose(); this._farTiles.delete(id); }
+    this._farBounds = want.size ? [Math.max(reach[0], cx - r), Math.max(reach[1], cy - r), Math.min(reach[2], cx + r), Math.min(reach[3], cy + r)] : null;
+    // the ring is cut out under the view, a little inside its edge so the two overlap without a gap
+    const m = Math.max(this.widthM, this.depthM) / Math.max(2, this.grid - 1), nw = this.worldPoint(b[0] + m, b[3] - m), se = this.worldPoint(b[2] - m, b[1] + m);
+    FAR_HOLE.value.set(nw.x, nw.z, se.x, se.z);
+  }
+  farGeometry(tile) {
+    const g = tile.gridSize, h = tile.heights, n = Math.floor((g - 1) / FAR_STEP) + 1, [x0, y0, x1, y1] = tile.bounds, k = WORLD_SCALE * this.exaggeration;
+    const positions = new Float32Array(n * n * 3), uvs = new Float32Array(n * n * 2), ok = new Uint8Array(n * n);
+    for (let r = 0, i = 0; r < n; r++) { const rr = Math.min(r * FAR_STEP, g - 1), north = y1 - rr / (g - 1) * (y1 - y0);
+      for (let c = 0; c < n; c++, i++) { const cc = Math.min(c * FAR_STEP, g - 1), v = Number(h[rr * g + cc]); ok[i] = v > -500 && v !== 0 ? 1 : 0;
+        positions[i * 3] = (x0 + cc / (g - 1) * (x1 - x0) - WORLD_ORIGIN_EPSG.easting) * WORLD_SCALE; positions[i * 3 + 1] = ok[i] ? (v - WORLD_DATUM_ELEVATION - FAR_DROP_M) * k : 0; positions[i * 3 + 2] = -(north - WORLD_ORIGIN_EPSG.northing) * WORLD_SCALE;
+        uvs[i * 2] = cc / (g - 1); uvs[i * 2 + 1] = 1 - rr / (g - 1); } }
+    const index = []; for (let r = 0; r < n - 1; r++) for (let c = 0; c < n - 1; c++) { const a = r * n + c, b = a + 1, d = a + n, e = d + 1; if (ok[a] && ok[b] && ok[d] && ok[e]) index.push(a, d, e, a, e, b); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(positions, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); geo.setIndex(index); geo.computeVertexNormals(); geo.computeBoundingSphere(); return geo;
+  }
+  makeFarTile(tile) {
+    const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .96, metalness: 0 }); material.onBeforeCompile = farPhotoTexture; material.customProgramCacheKey = () => 'far-terrain';
+    const mesh = new THREE.Mesh(this.farGeometry(tile), material); mesh.userData.tile = tile; mesh.visible = false; mesh.renderOrder = -10; this.farGroup.add(mesh);
+    // the photo is shown once loaded (until then the tile stays hidden rather than grey), decoded off the main thread at FAR_TEXTURE_PX;
+    const entry = this._farSource.manifest[tile.id], url = entry?.url && new URL(entry.url, this._farSource.base || globalThis.location?.href).href;
+    const load = () => fetch(url).then(r => r.ok ? r.blob() : Promise.reject(new Error(`${r.status} ${url}`))).then(blob => createImageBitmap(blob, { resizeWidth: FAR_TEXTURE_PX, resizeHeight: FAR_TEXTURE_PX, resizeQuality: 'high', imageOrientation: 'flipY' })).then(bitmap => {
+      if (!this._farTiles?.has(tile.id) || this._farTiles.get(tile.id) !== mesh) { bitmap.close?.(); return; }
+      const tex = new THREE.Texture(bitmap); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.needsUpdate = true; material.map = tex; material.needsUpdate = true; mesh.visible = true; this.requestRender();
+    }).catch(e => this.onError?.(e));
+    // fetched once the browser is idle, so the far photos never hold up the view's own terrain and photo
+    if (url && typeof createImageBitmap === 'function') { if (typeof requestIdleCallback === 'function') requestIdleCallback(load, { timeout: 4000 }); else setTimeout(load, 1500); }
+    return mesh;
+  }
+  refreshFarHeights() { for (const mesh of this._farTiles?.values() || []) { const old = mesh.geometry; mesh.geometry = this.farGeometry(mesh.userData.tile); old.dispose(); } this.requestRender(); }
+  // View depth from the camera to the edge of a box of ground (EPSG:2154 bounds), checked along the view and to either side.
+  viewEdge(bounds, cam, view) {
+    const west = this.worldPoint(bounds[0], bounds[3]), east = this.worldPoint(bounds[2], bounds[1]), heading = Math.atan2(view.z, view.x);
+    let edge = Infinity;
+    for (const turn of [-HAZE_SIDE, 0, HAZE_SIDE]) {
+      const dx = Math.cos(heading + turn), dz = Math.sin(heading + turn);
+      const tx = dx > 0 ? (east.x - cam.x) / dx : dx < 0 ? (west.x - cam.x) / dx : Infinity, tz = dz > 0 ? (east.z - cam.z) / dz : dz < 0 ? (west.z - cam.z) / dz : Infinity;
+      const t = Math.min(tx, tz); if (!(t > 0) || !Number.isFinite(t)) continue;
+      const depth = t * (dx * view.x + dz * view.z) + (this.controls.target.y - cam.y) * view.y; // view depth, which is what fog measures
+      if (depth > 0) edge = Math.min(edge, depth);
+    }
+    return edge;
+  }
   setInteraction(mode) { this.cancelPanAnimation('interaction'); const next = mode === 'pan' ? 'pan' : 'rotate'; this.interaction = next; this.controls.mouseButtons.LEFT = next === 'pan' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE; this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE; this.controls.touches.ONE = next === 'pan' ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE; this.requestRender(); }
   setMode(mode) { this.mode = mode === 'atlas' ? 'atlas' : 'aerial'; this.setMaterialMode(); this.applyLighting(); this.requestRender(); }
   setLayer(name, visible) { const next = Boolean(visible); if (name === 'communes') { this._communesVisible = next; if (this._communeLines) this._communeLines.visible = next; this.requestRender(); return; } if (name === 'cadastre') this._cadastreEnabled = next; if (this.layers[name]) this.layers[name].visible = next; if (name === 'cadastre') this.updateCadastreLOD(true); if (name === 'parcels' && this.aocMesh) this.aocMesh.visible = next || Boolean(this.terroirTint || this.geologyLayer); if (name === 'cadastre' && !next && this.selectedFeature?.key === 'cadastre') this.clearSelection(); else if (name === this.selectedFeature?.key) this.updateSelectionOverlay(); this.requestRender(); }
@@ -604,7 +700,7 @@ export class AtlasRenderer {
   focusVillage() { this.resetView(); }
   rebuildPreservingState() { const view = this.captureView(); const layers = Object.fromEntries(Object.entries(this.layers).filter(([name]) => name !== 'cadastre').map(([name, group]) => [name, group.visible])); this.clear(); this.build(); for (const [name, visible] of Object.entries(layers)) if (this.layers[name]) this.layers[name].visible = visible; if (this.layers.cadastre) this.layers.cadastre.visible = this._cadastreEnabled; if (this.aocMesh && this.layers.parcels) this.aocMesh.visible = this.layers.parcels.visible || Boolean(this.terroirTint || this.geologyLayer); this.restoreSelection(); this.restoreView(view); this.requestRender(); }
   getDebug() { return { village: this.indexVillage?.id || this.indexVillage?.name || null, gridSize: this.grid, bounds: this.bounds, exaggeration: this.exaggeration, mode: this.mode, aocOpacity: this.aocOpacity, drawCalls: this.renderer.info.render.calls, features: this.featureIndex.length }; }
-  build() { const d = this.sceneJSON; const bounds = d.bounds || d.bounds2154 || this.indexVillage?.bounds2154 || this.indexVillage?.bounds; if (!Array.isArray(bounds) || bounds.length !== 4) throw new Error('Scene bounds must be [xmin, ymin, xmax, ymax]'); this.bounds = bounds.map(Number); this.focusBounds = (this.indexVillage?.bounds2154 || this.indexVillage?.bounds || this.bounds).map(Number); const [xmin, ymin, xmax, ymax] = this.bounds; this.widthM = xmax - xmin; this.depthM = ymax - ymin; if (!(this.widthM > 0 && this.depthM > 0)) throw new Error('Scene bounds are invalid'); const heights = d.heights || d.heightGrid || d.terrain?.heights; this.grid = Number(d.gridSize || d.terrain?.gridSize || Math.sqrt(heights?.length || 0)); this.heightGrid = Array.isArray(heights) && Array.isArray(heights[0]) ? heights.flat() : heights; if (!Array.isArray(this.heightGrid) || this.heightGrid.length !== this.grid * this.grid) throw new Error('Scene heights must be a flat or nested square grid'); this.heightGrid = this.heightGrid.map(Number); if (this.heightGrid.some(v => !Number.isFinite(v))) throw new Error('Scene heights contain non-finite values'); this.validMask = this.readMask(d.validMask || d.terrain?.validMask); this.minElevation = Number(d.minElevation ?? Math.min(...this.heightGrid)); this.maxElevation = Number(d.maxElevation ?? Math.max(...this.heightGrid)); this.terrainHeight = Math.max(1, (this.maxElevation - this.minElevation) * WORLD_SCALE * this.exaggeration); this.terrain = this.makeTerrain(); this.sceneParent().add(this.terrain); this.addFeatures(); this.buildAocOverlay(); if (this.progressiveBuild) this.queueBuildStep(() => this.addLabels(), true); else this.addLabels(); this.setMaterialMode(); this.updateParcelVisibility(); this.updateScreenLineResolution(); this.applyLighting(); this.rebuildOwnerHighlight(this.sceneParent()); this.rebuildCompareOutlines(this.sceneParent()); this.rebuildCommuneBoundaries(this.sceneParent()); if (this.frostState) this.rebuildFrost(); if (this.progressiveBuild) { const rain = this.runoffState; if (rain && (rain.rainMm || rain.falling)) this.queueBuildStep(() => this.rebuildRunoff(), true); } else this.scheduleRunoffRebuild(); }
+  build() { const d = this.sceneJSON; const bounds = d.bounds || d.bounds2154 || this.indexVillage?.bounds2154 || this.indexVillage?.bounds; if (!Array.isArray(bounds) || bounds.length !== 4) throw new Error('Scene bounds must be [xmin, ymin, xmax, ymax]'); this.bounds = bounds.map(Number); this.focusBounds = (this.indexVillage?.bounds2154 || this.indexVillage?.bounds || this.bounds).map(Number); const [xmin, ymin, xmax, ymax] = this.bounds; this.widthM = xmax - xmin; this.depthM = ymax - ymin; if (!(this.widthM > 0 && this.depthM > 0)) throw new Error('Scene bounds are invalid'); const heights = d.heights || d.heightGrid || d.terrain?.heights; this.grid = Number(d.gridSize || d.terrain?.gridSize || Math.sqrt(heights?.length || 0)); this.heightGrid = Array.isArray(heights) && Array.isArray(heights[0]) ? heights.flat() : heights; if (!Array.isArray(this.heightGrid) || this.heightGrid.length !== this.grid * this.grid) throw new Error('Scene heights must be a flat or nested square grid'); this.heightGrid = this.heightGrid.map(Number); if (this.heightGrid.some(v => !Number.isFinite(v))) throw new Error('Scene heights contain non-finite values'); this.validMask = this.readMask(d.validMask || d.terrain?.validMask); this.minElevation = Number(d.minElevation ?? Math.min(...this.heightGrid)); this.maxElevation = Number(d.maxElevation ?? Math.max(...this.heightGrid)); this.terrainHeight = Math.max(1, (this.maxElevation - this.minElevation) * WORLD_SCALE * this.exaggeration); this.terrain = this.makeTerrain(); this.sceneParent().add(this.terrain); this.addFeatures(); this.buildWaterMask(); this.updateFarTerrain(); this.buildAocOverlay(); if (this.progressiveBuild) this.queueBuildStep(() => this.addLabels(), true); else this.addLabels(); this.setMaterialMode(); this.updateParcelVisibility(); this.updateScreenLineResolution(); this.applyLighting(); this.rebuildOwnerHighlight(this.sceneParent()); this.rebuildCompareOutlines(this.sceneParent()); this.rebuildCommuneBoundaries(this.sceneParent()); if (this.frostState) this.rebuildFrost(); if (this.progressiveBuild) { const rain = this.runoffState; if (rain && (rain.rainMm || rain.falling)) this.queueBuildStep(() => this.rebuildRunoff(), true); } else this.scheduleRunoffRebuild(); }
   readMask(mask) { if (!Array.isArray(mask) || mask.length !== this.grid * this.grid) return new Array(this.grid * this.grid).fill(true); return mask.map(v => v === true || v === 1 || v === '1'); }
   point(c) { return this.worldPoint(Number(c?.[0]), Number(c?.[1])); }
   validAt(row, col) { return row >= 0 && row < this.grid && col >= 0 && col < this.grid && this.validMask[row * this.grid + col]; }
@@ -726,7 +822,7 @@ export class AtlasRenderer {
   inside(point, ring) { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1], hit = ((yi > point[1]) !== (yj > point[1])) && point[0] < (xj - xi) * (point[1] - yi) / ((yj - yi) || 1e-12) + xi; if (hit) inside = !inside; } return inside; }
   scheduleViewChange() { if (this._panAnimation) { this._panViewDirty = true; return; } if (this.pendingViewChange) return; this.pendingViewChange = true; clearTimeout(this._viewTimer); this._viewTimer = setTimeout(() => { this.pendingViewChange = false; if (this._panAnimation) { this._panViewDirty = true; return; } const v = this.captureView(); this.onViewChange({ easting: v.easting, northing: v.northing, radiusMetres: v.radiusMetres }); }, 80); }
   // Lightness bends the photo's tones with a gamma curve, so it lifts shadows and mid-tones without clipping highlights the way brightness does.
-  setDisplay(settings) { const { brightness, lightness, saturation } = clampDisplay(settings); this._brightness = brightness; photoUniforms.photoSaturation.value = saturation; photoUniforms.photoGamma.value = BASE_GAMMA * 2 ** -lightness; this.applyLighting(); }
+  setDisplay(settings) { const { brightness, lightness, saturation } = clampDisplay(settings); this._brightness = brightness; this._saturation = saturation; photoUniforms.photoSaturation.value = saturation * (this._look?.saturationScale ?? 1); photoUniforms.photoGamma.value = BASE_GAMMA * 2 ** -lightness; this.applyLighting(); }
   // Sunlight for a sun position ({ elevation, azimuth } in degrees, azimuth clockwise from north), or null for the
   // usual even light. The sun casts terrain shadows; at night only a dim blue sky light is left.
   setSun(sun) { this.sunState = sun && Number.isFinite(sun.elevation) && Number.isFinite(sun.azimuth) ? { elevation: sun.elevation, azimuth: sun.azimuth } : null; this.applyLighting(); }
@@ -1107,25 +1203,24 @@ export class AtlasRenderer {
     const b = this.bounds, flat = Math.hypot(view.x, view.z);
     this.hazeUniforms.hazeNear.value = fog.near; this.hazeUniforms.hazeFar.value = fog.far;
     if (!b || flat < .05) return; // looking straight down: no horizon
-    const west = this.worldPoint(b[0], b[3]), east = this.worldPoint(b[2], b[1]), heading = Math.atan2(view.z, view.x);
-    let edge = Infinity;
-    for (const turn of [-HAZE_SIDE, 0, HAZE_SIDE]) {
-      const dx = Math.cos(heading + turn), dz = Math.sin(heading + turn);
-      const tx = dx > 0 ? (east.x - cam.x) / dx : dx < 0 ? (west.x - cam.x) / dx : Infinity, tz = dz > 0 ? (east.z - cam.z) / dz : dz < 0 ? (west.z - cam.z) / dz : Infinity;
-      const t = Math.min(tx, tz); if (!(t > 0) || !Number.isFinite(t)) continue;
-      const depth = t * (dx * view.x + dz * view.z) + (this.controls.target.y - cam.y) * view.y; // view depth, which is what fog measures
-      if (depth > 0) edge = Math.min(edge, depth);
-    }
+    const edge = this.viewEdge(b, cam, view);
     if (!Number.isFinite(edge)) return;
     // Close views end near the focus, so a clear zone wins over reaching the edge exactly: the vineyards are never hazed.
     fog.far = Math.max(edge * .96, d * 2.6); fog.near = Math.min(Math.max(fog.far * HAZE_START, d * 1.7), fog.far * .85);
-    // with the sky shown, the land beyond a few view distances melts into the mist, as on a hazy summer day
-    if (this.sky?.visible) { fog.far = Math.min(fog.far, d * 6); fog.near = Math.min(fog.near, fog.far * .3); }
+    // With the sky and the far ring shown, the land runs on past the view and only the far distance melts into the mist,
+    // as on a clear day with a little haze; the view itself stays clear. The mist moves out as the sky fades in.
+    const farReach = this.farGroup?.visible && this._farBounds && [...this._farTiles.values()].some(mesh => mesh.visible) ? this.viewEdge(this._farBounds, cam, view) : 0;
+    if (this.sky?.visible && farReach > fog.far) {
+      const reveal = this.sky.material.uniforms.reveal.value, mainEdge = fog.far, far = mainEdge + (farReach * .95 - mainEdge) * reveal;
+      fog.near = Math.max(d * 2.4, mainEdge * .8); fog.far = Math.max(far, fog.near * 1.5);
+      if (this.camera.far < fog.far * 1.1) { this.camera.far = fog.far * 1.1; this.camera.updateProjectionMatrix(); }
+    } else if (this.sky?.visible) { fog.far = Math.min(fog.far, d * 6); fog.near = Math.min(fog.near, fog.far * .3); }
     this.hazeUniforms.hazeNear.value = fog.near; this.hazeUniforms.hazeFar.value = fog.far;
   }
   updateSky() {
     const sky = this.sky; if (!sky) return;
     const want = Boolean(this.skyWanted && this.terrain && this.terrainReady?.());
+    if (this.farGroup) this.farGroup.visible = want;
     if (!want) { if (sky.visible) { sky.visible = false; this.skyStart = 0; this.scene.fog.color.copy(this.scene.background); } return; }
     if (!this.skyStart) this.skyStart = performance.now();
     const t = Math.min(1, (performance.now() - this.skyStart) / SKY_FADE_MS), reveal = t * t * (3 - 2 * t);
@@ -1272,7 +1367,7 @@ export class AtlasRenderer {
   // Written without temporary objects: it runs for every draped point each time a scene is built.
   elevationAt(x, z) { const grid = this.grid, last = grid - 1, col = (Number(x) / WORLD_SCALE + WORLD_ORIGIN_EPSG.easting - this.bounds[0]) / this.widthM * last, row = (this.bounds[3] - (WORLD_ORIGIN_EPSG.northing - Number(z) / WORLD_SCALE)) / this.depthM * last; if (!(col >= 0 && row >= 0 && col <= last && row <= last)) return null; const x0 = Math.floor(col), y0 = Math.floor(row), x1 = x0 < last ? x0 + 1 : last, y1 = y0 < last ? y0 + 1 : last, m = this.validMask, h = this.heightGrid, i00 = y0 * grid + x0, i01 = y0 * grid + x1, i10 = y1 * grid + x0, i11 = y1 * grid + x1; if (!m[i00] || !m[i01] || !m[i10] || !m[i11]) return null; const tx = col - x0, ty = row - y0; return ((h[i00] * (1 - tx) + h[i01] * tx) * (1 - ty) + (h[i10] * (1 - tx) + h[i11] * tx) * ty - WORLD_DATUM_ELEVATION) * WORLD_SCALE * this.exaggeration; }
   // Terrain mesh: one vertex per grid point (typed arrays, no per-point objects), two triangles per fully valid cell.
-  makeTerrain() { const n = this.grid, last = n - 1, count = n * n, positions = new Float32Array(count * 3), uvs = new Float32Array(count * 2), gridUv = new Float32Array(count * 2), valid = this.validMask, k = WORLD_SCALE * this.exaggeration; for (let row = 0, i = 0; row < n; row++) { const north = this.bounds[3] - row / last * this.depthM, z = -(north - WORLD_ORIGIN_EPSG.northing) * WORLD_SCALE, v = row / last; for (let col = 0; col < n; col++, i++) { positions[i * 3] = (this.bounds[0] + col / last * this.widthM - WORLD_ORIGIN_EPSG.easting) * WORLD_SCALE; positions[i * 3 + 1] = (this.heightGrid[i] - WORLD_DATUM_ELEVATION) * k; positions[i * 3 + 2] = z; uvs[i * 2] = gridUv[i * 2] = col / last; uvs[i * 2 + 1] = 1 - v; gridUv[i * 2 + 1] = v; } } let quads = 0; const ok = i => Boolean(valid[i]); for (let r = 0; r < last; r++) for (let c = 0; c < last; c++) { const i = r * n + c; if (ok(i) && ok(i + 1) && ok(i + n) && ok(i + n + 1)) quads++; } const indices = new Uint32Array(quads * 6); let q = 0; for (let r = 0; r < last; r++) for (let c = 0; c < last; c++) { const a = r * n + c, b = a + 1, d = a + n, e = d + 1; if (!(ok(a) && ok(b) && ok(d) && ok(e))) continue; indices.set([a, d, e, a, e, b], q); q += 6; } const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(positions, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); geo.setAttribute('gridUv', new THREE.BufferAttribute(gridUv, 2)); geo.setIndex(new THREE.BufferAttribute(indices, 1)); geo.computeVertexNormals(); const material = new THREE.MeshStandardMaterial({ color: 0x927b5f, roughness: .96, metalness: 0 }); material.onBeforeCompile = saturatePhotoTexture; const mesh = new THREE.Mesh(geo, material); mesh.receiveShadow = true; mesh.castShadow = true; mesh.userData.kind = 'terrain'; return mesh; }
+  makeTerrain() { const n = this.grid, last = n - 1, count = n * n, positions = new Float32Array(count * 3), uvs = new Float32Array(count * 2), gridUv = new Float32Array(count * 2), valid = this.validMask, k = WORLD_SCALE * this.exaggeration; for (let row = 0, i = 0; row < n; row++) { const north = this.bounds[3] - row / last * this.depthM, z = -(north - WORLD_ORIGIN_EPSG.northing) * WORLD_SCALE, v = row / last; for (let col = 0; col < n; col++, i++) { positions[i * 3] = (this.bounds[0] + col / last * this.widthM - WORLD_ORIGIN_EPSG.easting) * WORLD_SCALE; positions[i * 3 + 1] = (this.heightGrid[i] - WORLD_DATUM_ELEVATION) * k; positions[i * 3 + 2] = z; uvs[i * 2] = gridUv[i * 2] = col / last; uvs[i * 2 + 1] = 1 - v; gridUv[i * 2 + 1] = v; } } let quads = 0; const ok = i => Boolean(valid[i]); for (let r = 0; r < last; r++) for (let c = 0; c < last; c++) { const i = r * n + c; if (ok(i) && ok(i + 1) && ok(i + n) && ok(i + n + 1)) quads++; } const indices = new Uint32Array(quads * 6); let q = 0; for (let r = 0; r < last; r++) for (let c = 0; c < last; c++) { const a = r * n + c, b = a + 1, d = a + n, e = d + 1; if (!(ok(a) && ok(b) && ok(d) && ok(e))) continue; indices.set([a, d, e, a, e, b], q); q += 6; } const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(positions, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); geo.setAttribute('gridUv', new THREE.BufferAttribute(gridUv, 2)); geo.setIndex(new THREE.BufferAttribute(indices, 1)); geo.computeVertexNormals(); const material = new THREE.MeshStandardMaterial({ color: 0x927b5f, roughness: .96, metalness: 0 }); material.userData.water = { waterTex: { value: BLANK_WATER.waterTex.value }, waterOn: { value: 0 } }; material.onBeforeCompile = saturatePhotoTexture; const mesh = new THREE.Mesh(geo, material); mesh.receiveShadow = true; mesh.castShadow = true; mesh.userData.kind = 'terrain'; return mesh; }
   // Glides the view so a feature sits in the middle of the map area left uncovered by a bottom sheet
   // `coveredPx` tall (phones). Does nothing when it is already comfortably in view.
   revealFeature(feature, coveredPx = 0) {
@@ -1464,7 +1559,7 @@ export class AtlasRenderer {
     for (const mesh of made) { mesh.geometry.dispose(); mesh.material.map.dispose(); mesh.material.dispose(); }
     return target.texture;
   }
-  addAerialTexture(url) { if (this.textureRequested) return; const tiles = this.sceneJSON?.textureTiles || this.indexVillage?.textureTiles; this.textureRequested = true; const token = this.textureLoadToken = (this.textureLoadToken || 0) + 1, size = this.rasterSize(); if (Array.isArray(tiles) && tiles.length) { const sources = tiles.filter(tile => tile.url || tile.texture), loaded = new Array(sources.length).fill(null); let loadedCount = 0; const finish = () => { if (loadedCount === sources.length) { for (const item of loaded) if (item) this._tilesInUse?.delete(item.image); if (this.disposed || token !== this.textureLoadToken) return; try { this.terrainTexture = this.composeTilesOnGpu(loaded, size); } catch (error) { this.onError(error); return; } this.setMaterialMode(); } }; const loader = new THREE.TextureLoader(); sources.forEach((tile, index) => { const tileUrl = tile.url || tile.texture, tb = tile.bounds || this.bounds, fitW = Math.min(size, Math.max(64, Math.ceil((tb[2] - tb[0]) / this.widthM * size / 64) * 64)), fitH = Math.min(size, Math.max(64, Math.ceil((tb[3] - tb[1]) / this.depthM * size / 64) * 64)), key = `tile:${tileUrl}@${fitW}x${fitH}`, cached = this.imageCache.get(key); if (cached) { (this._tilesInUse ||= new Set()).add(cached); loaded[index] = { tile, image: cached }; loadedCount += 1; finish(); return; } const accept = image => { if (this.disposed || token !== this.textureLoadToken) return; (this._tilesInUse ||= new Set()).add(image); this.cacheImage(key, image); loaded[index] = { tile, image }; loadedCount += 1; finish(); }; /* A tile that fails is skipped (and reported unless optional), so it cannot hold back the rest. */ const failed = e => { if (!tile.optional) this.onError(e); loadedCount += 1; finish(); }; /* the rest of the photo still appears */ if (typeof createImageBitmap === 'function' && typeof fetch === 'function') { /* createImageBitmap decodes off the main thread; drawing an <img> would decode synchronously during compositing. */ const decode = src => fetch(src).then(res => { if (!res.ok) throw new Error(`Texture request failed (${res.status})`); return res.blob(); }).then(blob => createImageBitmap(blob, { resizeWidth: fitW, resizeHeight: fitH, resizeQuality: 'high' })); /* decoded straight to the size it covers in the composed photo: a wide view takes up to a dozen village photos, and decoding each at full size could run out of memory */ decode(tileUrl).catch(error => tile.fallbackUrl && tile.fallbackUrl !== tileUrl ? decode(tile.fallbackUrl) : Promise.reject(error)).then(accept).catch(failed); return; } loader.load(tileUrl, texture => { const image = texture.image; texture.dispose(); accept(image); }, undefined, failed); }); return; } if (!url) return; const key = `url:${url}`, cached = this.imageCache.get(key); if (cached) { const texture = new THREE.Texture(cached); texture.colorSpace = THREE.SRGBColorSpace; texture.needsUpdate = true; this.terrainTexture = texture; this.setMaterialMode(); return; } const fallback = this.sceneJSON?.textureFallback; const load = (src, onFail) => new THREE.TextureLoader().load(src, texture => { if (this.disposed || token !== this.textureLoadToken) { texture.dispose(); return; } this.cacheImage(key, texture.image); texture.colorSpace = THREE.SRGBColorSpace; this.terrainTexture = texture; this.setMaterialMode(); }, undefined, onFail); load(url, e => fallback && fallback !== url ? load(fallback, err => this.onError(err)) : this.onError(e)); }
+  addAerialTexture(url) { if (this.textureRequested) return; const tiles = this.sceneJSON?.textureTiles || this.indexVillage?.textureTiles; this.textureRequested = true; const token = this.textureLoadToken = (this.textureLoadToken || 0) + 1, size = this.rasterSize(); if (Array.isArray(tiles) && tiles.length) { const sources = tiles.filter(tile => tile.url || tile.texture), loaded = new Array(sources.length).fill(null); let loadedCount = 0; const finish = () => { if (loadedCount === sources.length) { for (const item of loaded) if (item) this._tilesInUse?.delete(item.image); if (this.disposed || token !== this.textureLoadToken) return; try { this.terrainTexture = this.composeTilesOnGpu(loaded, size); } catch (error) { this.onError(error); return; } this.setMaterialMode(); } }; const loader = new THREE.TextureLoader(); sources.forEach((tile, index) => { const tileUrl = tile.url || tile.texture, tb = tile.bounds || this.bounds, fitW = Math.min(size, Math.max(64, Math.ceil((tb[2] - tb[0]) / this.widthM * size / 64) * 64)), fitH = Math.min(size, Math.max(64, Math.ceil((tb[3] - tb[1]) / this.depthM * size / 64) * 64)), key = `tile:${tileUrl}@${fitW}x${fitH}`, cached = this.imageCache.get(key); if (cached) { (this._tilesInUse ||= new Set()).add(cached); loaded[index] = { tile, image: cached }; loadedCount += 1; finish(); return; } const accept = image => { if (this.disposed || token !== this.textureLoadToken) return; (this._tilesInUse ||= new Set()).add(image); this.cacheImage(key, image); loaded[index] = { tile, image }; loadedCount += 1; finish(); }; /* A tile that fails is skipped (and reported unless optional), so it cannot hold back the rest. */ const failed = e => { if (!tile.optional) this.onError(e); loadedCount += 1; finish(); }; /* the rest of the photo still appears */ if (typeof createImageBitmap === 'function' && typeof fetch === 'function') { /* createImageBitmap decodes off the main thread; drawing an <img> would decode synchronously during compositing. */ const decode = src => fetch(src).then(res => { if (!res.ok) throw new Error(`Texture request failed (${res.status})`); return res.blob(); }).then(blob => createImageBitmap(blob)).then(full => { if (full.width <= fitW * 1.1 && full.height <= fitH * 1.1) return full; return createImageBitmap(full, { resizeWidth: Math.min(fitW, full.width), resizeHeight: Math.min(fitH, full.height), resizeQuality: 'high' }).finally(() => full.close?.()); }); /* decoded at its own size and only shrunk to the size it covers in the composed photo, never stretched: stretching a 500 px close-view tile to the ~3700 px it spans uploaded fifty times its pixels to the GPU and froze the page after every zoom */ decode(tileUrl).catch(error => tile.fallbackUrl && tile.fallbackUrl !== tileUrl ? decode(tile.fallbackUrl) : Promise.reject(error)).then(accept).catch(failed); return; } loader.load(tileUrl, texture => { const image = texture.image; texture.dispose(); accept(image); }, undefined, failed); }); return; } if (!url) return; const key = `url:${url}`, cached = this.imageCache.get(key); if (cached) { const texture = new THREE.Texture(cached); texture.colorSpace = THREE.SRGBColorSpace; texture.needsUpdate = true; this.terrainTexture = texture; this.setMaterialMode(); return; } const fallback = this.sceneJSON?.textureFallback; const load = (src, onFail) => new THREE.TextureLoader().load(src, texture => { if (this.disposed || token !== this.textureLoadToken) { texture.dispose(); return; } this.cacheImage(key, texture.image); texture.colorSpace = THREE.SRGBColorSpace; this.terrainTexture = texture; this.setMaterialMode(); }, undefined, onFail); load(url, e => fallback && fallback !== url ? load(fallback, err => this.onError(err)) : this.onError(e)); }
   dispose() { this.disposed = true; this._cancelCadastreLOD(); if (this._renderFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._renderFrame); this._renderFrame = 0; clearTimeout(this._viewTimer); this.clear(); this.resizeObserver?.disconnect(); this.canvas.removeEventListener('pointerdown', this._onPointerDown); this.canvas.removeEventListener('pointerup', this._onPointerUp); this.canvas.removeEventListener('pointercancel', this._onPointerCancel); this.canvas.removeEventListener('dblclick', this._onDoubleClick); this.controls.removeEventListener('start', this._onControlsStart); this.controls.removeEventListener('end', this._onControlsEnd); this.controls.removeEventListener('change', this._onControlsChange); this.controls.dispose(); this.releaseRetiredMaterials(); this.renderer.dispose(); }
 }
 export default AtlasRenderer;
